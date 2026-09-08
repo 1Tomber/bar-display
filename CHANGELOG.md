@@ -4,6 +4,11 @@ Was in einer Fassung dazugekommen ist. Die Dateien zum Herunterladen hängen an
 den [Releases](https://github.com/Tarmac-Festival/bar-display/releases); ältere
 Fassungen als die hier aufgeführten stehen dort ebenfalls.
 
+## v1.4.1
+
+Eine Ergänzung an der Anzeige, die sich besser ansehen als beschreiben lässt.
+Sonst nichts: Bedienung, Einstellungen und Dateien bleiben wie in 1.4.0.
+
 ## v1.4.0
 
 Die erste Fassung nach einem echten Aufbau — vieles davon kommt aus dem Betrieb
