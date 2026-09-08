@@ -22,7 +22,8 @@ const { isVideoActive, describeWindows, timetableView, entryStartEnd, dayLabel, 
         lichtAusschnitt, lichtMarkeLage, nachtEnde, lichtSpalte,
         preisStil, gruppeHatInhalt, preisGruppen, preisSeiten, restzeitText,
         infoEinheit, infoTakt, nachDerUhr, faelligeInfoSeite,
-        zeitVersatz, probezeitLaeuft, versatzFuer } = ctx;
+        zeitVersatz, probezeitLaeuft, versatzFuer,
+        istPlanetenweide, nettErster, nettNaechster, nettFaellig } = ctx;
 // Ein top-level const landet in einem vm-Kontext nicht auf dem globalen
 // Objekt (Funktionsdeklarationen schon). Im Browser sehen die anderen
 // Skripte es trotzdem - hier muss man es ausdruecklich auswerten.
@@ -1037,6 +1038,62 @@ console.log('-- Restzeit des laufenden Acts --');
   // Die Schwelle laesst sich verschieben - dafuer ist sie ein Parameter
   check('mit eigener Schwelle frueher', restzeitText(bis(45), jetzt, 60), 'nur noch 45 min');
   check('und damit auch spaeter', restzeitText(bis(20), jetzt, 10), '');
+})();
+
+console.log('-- "Nett hier." --');
+(function () {
+  // Welcher Name die Anzeige zur Planetenweide macht
+  const bar = (oben, unten) => ({ barName: oben, subtitle: unten });
+
+  check('Vorgabe: der Name steht im Untertitel',
+        istPlanetenweide(bar('TARMAC BAR', 'Planetenweide')), true);
+  check('oder oben', istPlanetenweide(bar('PLANETENWEIDE', '')), true);
+  check('Schreibweise egal', istPlanetenweide(bar('planetenweide', '')), true);
+  check('die kurze Form zaehlt auch', istPlanetenweide(bar('Planetweide', '')), true);
+  check('Bindestrich und Abstand egal',
+        istPlanetenweide(bar('Planeten-Weide 2026', '')), true);
+  check('mittendrin im Satz',
+        istPlanetenweide(bar('Bar an der Planetenweide', '')), true);
+
+  check('fremde Bar', istPlanetenweide(bar('Hangar-Bar', 'by L300')), false);
+  check('leere Namen', istPlanetenweide(bar('', '')), false);
+  check('gar keine Einstellungen', istPlanetenweide(null), false);
+  // Sonst ergaebe "Planeten" oben und "Weide" unten faelschlich einen Treffer
+  check('ueber beide Felder hinweg gilt nicht',
+        istPlanetenweide(bar('Planeten', 'Weide')), false);
+
+  // Wann er drankommt
+  const STD = 3600000;
+  check('fruehestens nach zwanzig Minuten', nettErster(0, () => 0), 20 * 60000);
+  check('spaetestens nach achtzig', Math.round(nettErster(0, () => 1) / 60000), 80);
+  check('der Start zaehlt mit', nettErster(1000, () => 0), 20 * 60000 + 1000);
+
+  check('danach mindestens eine halbe Stunde Ruhe',
+        nettNaechster(0, () => 0), 30 * 60000);
+  check('hoechstens anderthalb', Math.round(nettNaechster(0, () => 1) / 60000), 90);
+
+  // Im Mittel eine Stunde. Gewuerfelt wird mit einer eigenen, wiederholbaren
+  // Folge - Math.random() waere hier ein Test, der manchmal fehlschlaegt.
+  (function () {
+    let saat = 12345;
+    const wuerfel = () => {
+      saat = (saat * 1103515245 + 12345) % 2147483648;
+      return saat / 2147483648;
+    };
+    let t = 0, wie_oft = 0;
+    const zwoelf = 12 * STD;
+    while ((t = nettNaechster(t, wuerfel)) <= zwoelf) wie_oft++;
+    check('in zwoelf Stunden rund zwoelfmal', wie_oft >= 9 && wie_oft <= 15, true);
+  })();
+
+  // Ob er drankommt
+  const fremd = bar('Hangar-Bar', 'by L300');
+  check('vor dem Zeitpunkt nicht', nettFaellig(fremd, 1000, 999), false);
+  check('genau darauf schon', nettFaellig(fremd, 1000, 1000), true);
+  check('danach auch', nettFaellig(fremd, 1000, 5000), true);
+  check('auf der Planetenweide nie',
+        nettFaellig(bar('TARMAC BAR', 'Planetenweide'), 1000, 5000), false);
+  check('ohne Plan gar nicht', nettFaellig(fremd, Infinity, 5000), false);
 })();
 
 console.log('\n' + pass + ' bestanden, ' + fail + ' fehlgeschlagen');

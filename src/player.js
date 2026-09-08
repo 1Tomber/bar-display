@@ -48,6 +48,12 @@ let letzteInfo = {};
 // Siehe playItem(): die Karte wird am Stueck gezeigt, nicht verstreut.
 let nachschlag = [];
 
+// Wann ist der Aufkleber das naechste Mal dran? Siehe nettErster() in
+// common.js. Wird beim Start gesetzt und danach nur weitergeschoben - eine
+// neue Konfiguration setzt ihn ausdruecklich nicht zurueck, sonst waere die
+// Anzeige nach jedem Speichern wieder zwanzig Minuten lang "frisch gestartet".
+let nettPlan = Infinity;
+
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
@@ -62,6 +68,7 @@ async function boot() {
   httpModus = paths.mode === 'http';
   cfg = await window.api.getConfig();
   applyTheme();
+  nettPlan = nettErster(Date.now());
 
   window.api.onConfigChanged((next) => konfigUebernehmen(next));
 
@@ -438,6 +445,18 @@ function advance(delay) {
   // Angefangene Karte zu Ende zeigen, bevor irgendetwas anderes drankommt
   if (nachschlag.length) { playItem(nachschlag.shift()); return; }
 
+  // Der Aufkleber. Steht hinter dem Nachschlag, damit er keine angefangene
+  // Karte auseinanderreisst, und vor den Info-Seiten, damit ihn eine haeufige
+  // Seite nicht dauernd verdraengt.
+  //
+  // Gemessen wird an der echten Uhr: eine Probezeit verschiebt, welcher Abend
+  // gezeigt wird, nicht wie lange die Anzeige schon laeuft.
+  if (nettFaellig(cfg.settings, nettPlan, Date.now())) {
+    nettPlan = nettNaechster(Date.now());
+    playItem({ type: 'nett' });
+    return;
+  }
+
   // Zeitgesteuerte Info-Seiten schieben sich zwischen zwei Beitraege, ohne die
   // Runde weiterzuruecken - der naechste Beitrag kommt danach ganz normal.
   const faellig = faelligeInfoSeite(cfg.settings, {
@@ -605,6 +624,7 @@ function playSlide(item) {
   if (item.type === 'timetable') secs = s.timetableDuration || 20;
   else if (item.type === 'prices') secs = s.pricesDuration || 25;
   else if (item.type === 'licht') secs = s.lichtDuration || 20;
+  else if (item.type === 'nett') secs = NETT_DAUER_S;
   else secs = 30;
   if (nurVorschau) secs = 8;      // in der Vorschau zuegig durchwechseln
 
@@ -832,6 +852,7 @@ function renderSlide(kind, seite) {
   if (kind === 'timetable') return renderTimetable();
   if (kind === 'prices') return renderPrices(seite);
   if (kind === 'licht') return renderLicht();
+  if (kind === 'nett') return renderNett();
   return renderIdle();
 }
 
@@ -1264,6 +1285,105 @@ function renderSpecial() {
     '</div>' +
     (sp.text ? '<div class="specialText">' + escapeHtml(sp.text) + '</div>' : '') +
     '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// "Nett hier."
+// ---------------------------------------------------------------------------
+// Nachgebaut statt als Bild eingebunden: als SVG mit viewBox liegt alles in
+// einem Koordinatensystem und wird von der Ebene auf jedes Format gerechnet -
+// vom 1024x600-Brett bis 4K, quer wie hoch, und auf jedem davon gestochen
+// scharf. Das Original ist eine 1024er Rastergrafik; auf einem grossen Schirm
+// waere davon vor allem der QR-Code weich, und genau der soll gescannt werden.
+//
+// Die viewBox ist so gross wie das Original (1024x658, siehe
+// branding/nett-hier.png), damit jede Zahl hier direkt ein Pixel des
+// Aufklebers ist - die Masse sind an ihm abgemessen.
+const NETT_ZIEL = 'https://linktr.ee/l300decart';
+const NETT_GELB = '#fefd02';
+const NETT_EMBLEM = 'branding/l300-logo-schwarz.png';
+const NETT_BILD = 'branding/nett-hier.png';
+
+// Rueckfall auf das Original als Bild. Gefaellt der Nachbau nicht, genuegt
+// hier ein true - Form, Platz und Ablauf bleiben gleich.
+//
+// Bewusst let und nicht const: so kann der Test beide Wege durchlaufen. Ein
+// Rueckfall, den nie jemand ausprobiert, ist am Tag, an dem man ihn braucht,
+// erfahrungsgemaess kaputt.
+let NETT_ALS_BILD = false;
+
+function renderNett() {
+  return '<div class="nettWrap">' +
+    (NETT_ALS_BILD
+      ? '<img class="nettBild" src="' + NETT_BILD + '" alt="">'
+      : nettSvg()) +
+    '</div>';
+}
+
+// Laufende Nummer fuer den Zuschnitt. Waehrend einer Blende liegen zwei
+// Ebenen im Dokument; mit festem Namen zeigte die eine auf die Definition der
+// anderen - und verloere ihn, sobald jene geraeumt wird.
+let nettNr = 0;
+
+function nettSvg() {
+  const rand = 'nettRand' + (++nettNr);
+  // textLength haelt die Zeilenbreiten fest. Welche Serifenschrift ein Rechner
+  // hat, ist damit gleichgueltig: am Pi steht sonst eine andere als am
+  // Bar-Rechner, und die Zeile saesse mal mittig, mal ueber dem Rand.
+  const zeile = (klasse, y, breite, text) =>
+    '<text class="' + klasse + '" x="512" y="' + y + '" textLength="' + breite +
+    '" lengthAdjust="spacingAndGlyphs">' + escapeHtml(text) + '</text>';
+
+  return '<svg class="nettBild" viewBox="0 0 1024 658" ' +
+             'preserveAspectRatio="xMidYMid meet" ' +
+             'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<defs><clipPath id="' + rand + '">' +
+      '<ellipse cx="512" cy="329" rx="512" ry="329"/></clipPath></defs>' +
+    // Die Klasse unterscheidet sie von der gleich grossen im clipPath - die
+    // wird nie gezeichnet, taucht aber in jeder Auswahl als erste auf.
+    '<ellipse class="nettRund" cx="512" cy="329" rx="512" ry="329" ' +
+             'fill="' + NETT_GELB + '"/>' +
+    // Das Emblem steht bis an den oberen Rand und wird dort von der Ellipse
+    // angeschnitten - so ist es auf dem gedruckten Aufkleber auch. Der
+    // Zuschnitt sorgt zugleich dafuer, dass nie etwas Schwarzes neben dem
+    // Gelb auf dem lila Hintergrund landet.
+    '<g clip-path="url(#' + rand + ')">' +
+      '<image href="' + NETT_EMBLEM + '" x="381" y="-2.5" width="262" height="218.5"/>' +
+    '</g>' +
+    zeile('nettGross', 326, 586, 'Nett hier.') +
+    // Im Original sitzt diese Zeile ein Stueck zu weit rechts. Hier steht sie
+    // mittig - der Rest des Aufklebers tut das auch.
+    zeile('nettKlein', 387, 843, 'Aber waren Sie schon mal auf der Planetenweide?') +
+    nettQr(NETT_ZIEL, 431, 448, 162) +
+    '</svg>';
+}
+
+// QR-Code als ein einziger Pfad, in den Koordinaten des Aufklebers. Die
+// fertige createSvgTag() der Bibliothek liefert ein eigenes <svg> ohne Masse -
+// eingebettet fuellte das die ganze Flaeche.
+function nettQr(text, x, y, groesse) {
+  if (typeof qrcode !== 'function') return '';
+  try {
+    if (qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs['UTF-8']) {
+      qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+    }
+    const q = qrcode(0, 'M');
+    q.addData(text);
+    q.make();
+
+    const n = q.getModuleCount();
+    let d = '';
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (q.isDark(r, c)) d += 'M' + c + ' ' + r + 'h1v1h-1z';
+      }
+    }
+    return '<g transform="translate(' + x + ' ' + y + ') scale(' +
+           (groesse / n).toFixed(5) + ')"><path d="' + d + '" fill="#000"/></g>';
+  } catch (e) {
+    console.warn('QR-Code nicht erzeugt:', e && e.message);
+    return '';
+  }
 }
 
 function renderIdle() {

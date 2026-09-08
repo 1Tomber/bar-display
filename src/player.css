@@ -600,6 +600,38 @@ body[data-pattern="confetti"] .slide {
   text-transform: none;
 }
 
+/* --------------------------- "Nett hier." --------------------------- */
+/* Der Aufkleber liegt als SVG mit fester viewBox in der Ebene (siehe
+   renderNett() in player.js). Alles Weitere macht preserveAspectRatio: auf
+   einem hohen Schirm wird er schmaler statt gequetscht, auf einem breiten
+   niedriger. Deshalb steht hier keine einzige Groessenangabe in em oder vw. */
+.nettWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4%;
+  min-width: 0;
+}
+.nettBild {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;   /* gilt fuer den Rueckfall als Bild */
+}
+
+/* Serifen wie auf dem gedruckten Aufkleber. Mitgeliefert wird dafuer nichts:
+   die Breiten stehen ohnehin fest (textLength), es geht nur um den Charakter -
+   und irgendeine Serifenschrift hat jedes System. */
+.nettGross, .nettKlein {
+  fill: #000;
+  text-anchor: middle;
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', 'DejaVu Serif',
+               'Liberation Serif', serif;
+  font-weight: 400;
+}
+.nettGross { font-size: 150px; }
+.nettKlein { font-size: 41px; }
+
 /* --------------------------- Startbild ----------------------------- */
 .idleWrap {
   flex: 1;

@@ -1026,6 +1026,73 @@ function faelligeInfoSeite(settings, opt) {
 }
 
 // ---------------------------------------------------------------------------
+// "Nett hier."
+// ---------------------------------------------------------------------------
+// Der Aufkleber wirbt fuer die Planetenweide. An jeder anderen Bar taucht er
+// gelegentlich fuer zwanzig Sekunden auf - auf der Planetenweide selbst waere
+// er albern, dort bleibt er weg.
+//
+// Geprueft werden beide Namensfelder: in der Vorgabe steht "TARMAC BAR" oben
+// und "Planetenweide" darunter. Wer nur das obere pruefte, haenge den
+// Aufkleber ausgerechnet an die Bar, fuer die er wirbt.
+
+const PLANETENWEIDE_WORTE = ['planetenweide', 'planetweide'];
+
+/** Namen auf Buchstaben eindampfen: Schreibweise, Abstand und Bindestrich egal. */
+function nameKahl(text) {
+  return String(text || '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+/** Steht die Anzeige auf der Planetenweide? */
+function istPlanetenweide(settings) {
+  const s = settings || {};
+  // Mit Trennzeichen zusammengesetzt, sonst ergaebe "Planeten" oben und
+  // "Weide" unten faelschlich einen Treffer.
+  const namen = nameKahl(s.barName) + '|' + nameKahl(s.subtitle);
+  return PLANETENWEIDE_WORTE.some(w => namen.indexOf(w) >= 0);
+}
+
+const NETT_DAUER_S = 20;              // so lange steht er
+const NETT_VORLAUF_MS = 20 * 60000;   // die ersten zwanzig Minuten bleibt er weg
+const NETT_TAKT_MS = 60 * 60000;      // im Schnitt einmal je Stunde
+
+function wuerfeln(w) {
+  const r = typeof w === 'function' ? w() : Math.random();
+  return Math.min(Math.max(Number(r) || 0, 0), 0.999999);
+}
+
+/**
+ * Erster Auftritt: fruehestens zwanzig Minuten nach dem Start, dann irgendwo
+ * in der folgenden Stunde. Wer die Anzeige beim Aufbau kurz laufen laesst,
+ * bekommt ihn also gar nicht zu sehen.
+ */
+function nettErster(start, wuerfel) {
+  return start + NETT_VORLAUF_MS + Math.floor(wuerfeln(wuerfel) * NETT_TAKT_MS);
+}
+
+/**
+ * Jeder weitere Auftritt: eine halbe bis anderthalb Stunden spaeter, im Mittel
+ * eine Stunde. Bewusst gewuerfelt und nicht im festen Takt - sonst kaeme er
+ * jede Stunde zur selben Minute, und dann ist es keine Ueberraschung mehr.
+ * Die halbe Stunde Mindestabstand verhindert zwei Auftritte kurz hintereinander.
+ */
+function nettNaechster(zuletzt, wuerfel) {
+  return zuletzt + NETT_TAKT_MS / 2 + Math.floor(wuerfeln(wuerfel) * NETT_TAKT_MS);
+}
+
+/**
+ * Ist der Aufkleber jetzt dran?
+ *
+ * `jetzt` ist ausdruecklich die echte Uhr: hier wird gemessen, wie lange die
+ * Anzeige schon laeuft. Eine Probezeit verschiebt den Zeitpunkt, nicht den
+ * Lauf der Zeit - siehe zeitVersatz().
+ */
+function nettFaellig(settings, plan, jetzt) {
+  if (istPlanetenweide(settings)) return false;
+  return Number.isFinite(plan) && jetzt >= plan;
+}
+
+// ---------------------------------------------------------------------------
 // Probezeit
 // ---------------------------------------------------------------------------
 // Beim Einrichten will man sehen, wie die Anzeige um 23 Uhr aussieht, ohne bis
