@@ -55,11 +55,16 @@ if (!window.api) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cfg)
       });
-      const daten = await antwort.json();
+      const daten = await antwort.json().catch(() => ({}));
       // 409: inzwischen woanders gespeichert. Die Einstellungsseite fragt
       // dann nach, statt eine Fehlermeldung zu zeigen.
       if (antwort.status === 409) return daten;
-      if (!antwort.ok) throw new Error('/api/config -> HTTP ' + antwort.status);
+      // 401: die Anmeldung gilt nicht mehr. Sie liegt nur im Arbeitsspeicher
+      // des Dienstes - nach einem Neustart, etwa weil eine neue Fassung
+      // installiert wurde, ist sie weg. Auch das ist keine Fehlermeldung
+      // wert, sondern eine neue PIN-Abfrage.
+      if (antwort.status === 401) return { pinNoetig: true };
+      if (!antwort.ok) throw new Error('HTTP ' + antwort.status);
       return daten;
     },
     onConfigChanged: (cb) => beobachter.push(cb),

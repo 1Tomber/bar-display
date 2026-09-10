@@ -1,6 +1,6 @@
 {
   "name": "bar-display",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Werbe- und Infodisplay fuer die Bar auf der Planetenweide (Tarmac)",
   "productName": "Bar Display",
   "main": "main.js",

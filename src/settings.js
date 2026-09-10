@@ -77,10 +77,16 @@ async function zugangPruefen() {
   let zustand = null;
   try { zustand = await window.api.zugangStatus(); } catch (e) { return; }
   if (!zustand || !zustand.pinAktiv || zustand.angemeldet) return;
-  await pinAbfragen();
+  await pinAbfragen(true);
 }
 
-function pinAbfragen() {
+/**
+ * PIN-Abfrage. `neuLaden` holt danach die vollstaendige Konfiguration - das
+ * ist beim Oeffnen der Seite richtig, mitten im Speichern aber falsch: dort
+ * wuerde es die gerade getippten Aenderungen ueberschreiben. Der Dienst
+ * behaelt die PIN in dem Fall von sich aus, siehe /api/config im Webserver.
+ */
+function pinAbfragen(neuLaden) {
   return new Promise((fertig) => {
     const schirm = document.createElement('div');
     schirm.id = 'pinSchirm';
@@ -107,10 +113,11 @@ function pinAbfragen() {
       try { antwort = await window.api.anmelden(feld.value); } catch (err) { /* gleich */ }
       if (antwort && antwort.ok) {
         schirm.remove();
+        if (neuLaden === false) return fertig(true);
         // Jetzt darf die vollstaendige Konfiguration geholt werden - vorher kam
         // sie ohne PIN, und die wuerde beim Speichern die echte ueberschreiben.
         try { state = await window.api.getConfig(); fillAll(); } catch (err) { location.reload(); }
-        return fertig();
+        return fertig(true);
       }
       fehler.textContent = (antwort && antwort.fehler) || 'PIN stimmt nicht.';
       feld.value = '';
@@ -731,6 +738,20 @@ function fokusZurueck(merker) {
 }
 
 // Gibt zurueck, ob wirklich gespeichert wurde.
+// Einmal hinschicken und jeden Fehlschlag sichtbar machen. Was hier schiefgeht,
+// geht im Netzwerk schief: WLAN weg, Dienst neu gestartet, Rechner zugeklappt.
+// Nichts davon darf aussehen wie "der Knopf tut nichts".
+async function sicherHin() {
+  try {
+    return await window.api.saveConfig(state);
+  } catch (err) {
+    const grund = (err && err.message) || 'keine Verbindung';
+    toast('Speichern fehlgeschlagen (' + grund + ') - Verbindung pruefen', true);
+    console.warn('[speichern]', err);
+    return null;
+  }
+}
+
 async function save() {
   // Datum und Uhrzeit uebernehmen ihren Text erst beim Verlassen des Feldes.
   // Ohne das wuerde Strg+S den alten Wert sichern, waehrend im Feld schon der
@@ -752,7 +773,21 @@ async function save() {
     items: (c.items || []).filter(i => i && (i.name || i.price || i.photo || i.text))
   }));
 
-  let antwort = await window.api.saveConfig(state);
+  let antwort = await sicherHin();
+  if (antwort === null) return false;
+
+  // Die Anmeldung gilt nicht mehr - der Dienst wurde neu gestartet, oder die
+  // zwoelf Stunden sind um. Vorher flog hier eine Ausnahme, die niemand fing:
+  // das Speichern tat schlicht nichts, ohne ein Wort auf dem Schirm.
+  if (antwort && antwort.pinNoetig) {
+    await pinAbfragen(false);
+    antwort = await sicherHin();
+    if (antwort === null) return false;
+    if (antwort && antwort.pinNoetig) {
+      toast('Speichern fehlgeschlagen - die PIN wurde nicht angenommen', true);
+      return false;
+    }
+  }
 
   // Inzwischen hat jemand anders gespeichert - am Rechner, am Handy oder an
   // einem zweiten Handy. Ohne Rueckfrage wuerde hier dessen Arbeit verschwinden.
@@ -773,7 +808,8 @@ async function save() {
     }
     // Bewusst ueberschreiben: auf den aktuellen Stand aufsetzen und nochmal hin.
     state.stand = antwort.aktuell && antwort.aktuell.stand;
-    antwort = await window.api.saveConfig(state);
+    antwort = await sicherHin();
+    if (antwort === null) return false;
     if (antwort && antwort.konflikt) {
       toast('Speichern fehlgeschlagen - es wird gerade woanders geändert', true);
       return false;

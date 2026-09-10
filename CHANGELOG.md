@@ -4,6 +4,19 @@ Was in einer Fassung dazugekommen ist. Die Dateien zum Herunterladen hängen an
 den [Releases](https://github.com/Tarmac-Festival/bar-display/releases); ältere
 Fassungen als die hier aufgeführten stehen dort ebenfalls.
 
+## v1.4.3
+
+### Behoben
+
+- **Speichern vom Handy tat nichts — ohne ein Wort.** Ging es schief, verschwand
+  der Fehler still: kein Hinweis, der Knopf schien tot. Jetzt steht jeder
+  Fehlschlag auf dem Schirm.
+- **Nach einem Neustart des Programms ließ sich vom Handy nichts mehr
+  speichern.** Die Anmeldung mit der PIN liegt nur im Arbeitsspeicher — wird
+  eine neue Fassung installiert oder der Rechner neu gestartet, ist sie weg.
+  Statt stumm zu scheitern, fragt die Seite die PIN jetzt neu ab und speichert
+  danach weiter. Was schon getippt war, bleibt dabei stehen.
+
 ## v1.4.2
 
 ### Behoben
