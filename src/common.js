@@ -994,6 +994,11 @@ function infoTakt(settings, art) {
 
 /** Laeuft diese Seite nach der Uhr? */
 function nachDerUhr(settings, art) {
+  // Nur Info-Seiten laufen nach der Uhr. Ohne diese Zeile beantwortet
+  // infoFelder() die Frage auch fuer einen Beitrag - und faellt dabei still
+  // auf die Lichtseite zurueck. Stand die auf Minuten, galt das damit
+  // heimlich fuer jedes Video: es flog aus der Runde und lief nie.
+  if (INFO_SEITEN.indexOf(art) < 0) return false;
   return infoEinheit(settings, art) === 'minuten' && infoTakt(settings, art) > 0;
 }
 

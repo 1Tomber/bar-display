@@ -4,6 +4,18 @@ Was in einer Fassung dazugekommen ist. Die Dateien zum Herunterladen hängen an
 den [Releases](https://github.com/Tarmac-Festival/bar-display/releases); ältere
 Fassungen als die hier aufgeführten stehen dort ebenfalls.
 
+## v1.4.2
+
+### Behoben
+
+- **„Noch keine Inhalte", sobald ein Video dazukam.** Lineup und Preise liefen
+  sauber durch — bis ein Clip in die Schleife kam, dann stand der
+  Leerlauf-Hinweis auf dem Bildschirm. Ursache: die Häufigkeit der Lichtseite
+  galt heimlich auch für Videos. Stand sie auf Minuten, flog jeder Clip aus der
+  Runde; standen Timetable und Karte ebenfalls auf Minuten, blieb gar nichts
+  übrig. Beitragslose Runden kann es jetzt nicht mehr geben: was auch immer in
+  den Häufigkeiten steht, es bleibt etwas zu sehen.
+
 ## v1.4.1
 
 Eine Ergänzung an der Anzeige, die sich besser ansehen als beschreiben lässt.

@@ -426,9 +426,13 @@ function buildPlaylist() {
   // dazwischen, siehe advance(). Steht gar kein Beitrag in der Runde, bleiben
   // sie drin: sonst zeigte die Anzeige nichts.
   const hatBeitraege = runde.items.some(i => i.type === 'video');
-  playlist = hatBeitraege
-    ? runde.items.filter(i => !nachDerUhr(s, i.type))
-    : runde.items;
+  const gefiltert = runde.items.filter(i => !nachDerUhr(s, i.type));
+
+  // Bleibt nach dem Aussortieren nichts uebrig, gilt die ungefilterte Runde.
+  // Eine Einstellung zur Haeufigkeit darf den Bildschirm nicht leer raeumen:
+  // dort stuende sonst "Noch keine Inhalte", obwohl Timetable und Karte
+  // gepflegt sind - genau das ist an einem Festivaltag passiert.
+  playlist = (hatBeitraege && gefiltert.length) ? gefiltert : runde.items;
 }
 
 // ---------------------------------------------------------------------------

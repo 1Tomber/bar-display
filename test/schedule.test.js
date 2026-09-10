@@ -797,6 +797,25 @@ check('mit 0 laeuft sie gar nicht',
 check('mit Beitraegen nicht nach der Uhr',
       nachDerUhr({ timetableEinheit: 'beitraege', timetableEvery: 3 }, 'timetable'), false);
 
+// Ein Beitrag laeuft nie nach der Uhr - er ist keine Info-Seite. infoFelder()
+// kennt nur Timetable und Karte und faellt fuer alles andere auf die
+// Lichtseite zurueck; ohne diese Sperre galt deren Einstellung heimlich auch
+// fuer jedes Video. Stand die Lichtseite auf Minuten, flog jedes Video aus der
+// Runde - und mit Timetable und Karte ebenfalls auf Minuten blieb gar nichts
+// uebrig. Auf dem Bildschirm stand dann "Noch keine Inhalte".
+const alleNachMinuten = {
+  timetableEinheit: 'minuten', timetableEvery: 10,
+  pricesEinheit: 'minuten', pricesEvery: 10,
+  lichtEinheit: 'minuten', lichtEvery: 10
+};
+check('ein Video laeuft nie nach der Uhr',
+      nachDerUhr(alleNachMinuten, 'video'), false);
+check('auch ein Bild nicht', nachDerUhr(alleNachMinuten, 'image'), false);
+check('und der Leerlauf erst recht nicht',
+      nachDerUhr(alleNachMinuten, 'idle'), false);
+check('die Lichtseite selbst aber schon',
+      nachDerUhr(alleNachMinuten, 'licht'), true);
+
 (function () {
   const s = { timetableEvery: 2, timetableEinheit: 'minuten',
               pricesEvery: 5, pricesEinheit: 'beitraege' };
