@@ -24,6 +24,7 @@ let videoCounter = 0;   // läuft ueber die Runden hinweg weiter
 let zaehlerVorRunde = 0;  // Stand zu Beginn der laufenden Runde, siehe neueRunde()
 let itemToken = 0;        // invalidiert Callbacks bereits abgelöster Elemente
 let imRuhemodus = false;  // Bildschirm schwarz, Schleife angehalten
+let nachtAktiv = false;   // gelten gerade die Nachtfarben? siehe istNacht()
 // Vorschau: nur die Info-Slides, keine Videos. So kostet die Vorschau auf der
 // Bedienseite den Pi kein zweites Mal Dekodierung und dem Handy kein Datenvolumen.
 const nurVorschau = new URLSearchParams(location.search).has('vorschau');
@@ -125,11 +126,16 @@ function applyTheme() {
   // Wurde die Auswahl der Uebergaenge geaendert, gilt der alte Vorrat nicht mehr
   uebergangsBeutel = [];
   document.body.classList.toggle('spar', !!s.sparmodus);
-  root.setProperty('--bg', s.bgColor || '#450b6f');
-  root.setProperty('--accent', s.accent || '#74ff40');
-  root.setProperty('--accent2', s.accent2 || '#f04e23');
-  root.setProperty('--blob', 'color-mix(in srgb, ' + (s.bgColor || '#450b6f') + ' 38%, #000)');
-  root.setProperty('--muted', 'color-mix(in srgb, ' + (s.bgColor || '#450b6f') + ' 32%, #ffffff 68%)');
+  // Tag- oder Nachtfarben - nach derselben Uhr wie alles andere, damit sich die
+  // Umschaltung mit einer Probezeit ausprobieren laesst.
+  nachtAktiv = istNacht(s, zeitJetzt());
+  document.body.dataset.tageszeit = nachtAktiv ? 'nacht' : 'tag';
+  const farben = tagNachtFarben(s, nachtAktiv);
+  root.setProperty('--bg', farben.bgColor);
+  root.setProperty('--accent', farben.accent);
+  root.setProperty('--accent2', farben.accent2);
+  root.setProperty('--blob', 'color-mix(in srgb, ' + farben.bgColor + ' 38%, #000)');
+  root.setProperty('--muted', 'color-mix(in srgb, ' + farben.bgColor + ' 32%, #ffffff 68%)');
   root.setProperty('--fade', (s.transition === 'cut' ? 0 : (s.fadeMs || 700)) + 'ms');
   document.body.dataset.pattern = s.pattern || 'dots';
   document.body.dataset.rotation = String([0, 90, 180, 270].includes(Number(s.rotation))
@@ -230,6 +236,18 @@ function konfigUebernehmen(next) {
 function sonderzustaende() {
   durchsagePruefen();
   ruhePruefen();
+  tagNachtPruefen();
+}
+
+// Ist es inzwischen Nacht geworden - oder wieder Tag? Nur dann die Farben neu
+// setzen: applyTheme() verwirft die gemerkte Skalierung, und das soll nicht
+// alle zehn Sekunden passieren.
+function tagNachtPruefen() {
+  if (!cfg) return;
+  if (istNacht(cfg.settings, zeitJetzt()) === nachtAktiv) return;
+  applyTheme();
+  console.log('[tagnacht] Anzeige wechselt auf ' + (nachtAktiv ? 'Nacht' : 'Tag'));
+  refreshVisibleSlide(true);
 }
 
 // Was zurzeit auf dem Balken steht. Wird gemerkt, damit der Balken nur dann neu

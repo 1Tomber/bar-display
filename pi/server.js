@@ -17,10 +17,14 @@ const webserver = require('../lib/webserver');
 const konfigablage = require('../lib/konfigablage');
 
 const PORT = Number(process.env.PORT) || 8080;
+// Zweiter Anschluss fuer das Anmeldefenster der Handys und die Adresse ohne
+// Portnummer. 0 oder leer: keiner. Braucht Port 80 - die Faehigkeit dafuer
+// gibt die systemd-Unit (AmbientCapabilities), sonst bleibt es beim Hinweis.
+const PORTAL_PORT = Number(process.env.PORTAL_PORT) || 0;
 
 const ablage = konfigablage.erstellen(process.env.BARDISPLAY_DIR);
 
-const { server } = webserver.erstellen({
+const { server, anfrage } = webserver.erstellen({
   ordner: ablage.ordner,
   lesen: ablage.lesen,
   schreiben: ablage.schreiben,
@@ -47,3 +51,11 @@ server.listen(PORT, () => {
   }
   console.log('  Datenablage  : ' + ablage.ordner.user);
 });
+
+if (PORTAL_PORT && PORTAL_PORT !== PORT) {
+  const portal = require('http').createServer(anfrage);
+  portal.on('error', (e) => {
+    console.error('[dienst] Port ' + PORTAL_PORT + ' nicht zu haben (' + e.code + ') - Anmeldefenster und Adresse ohne Portnummer fallen aus.');
+  });
+  portal.listen(PORTAL_PORT, () => console.log('  Anmeldeseite : http://<Adresse>' + (PORTAL_PORT === 80 ? '' : ':' + PORTAL_PORT) + '/portal'));
+}

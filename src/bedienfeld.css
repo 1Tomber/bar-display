@@ -1,0 +1,73 @@
+/* Das Bedienfeld: der 7"-Touchbildschirm (800 x 480) am DSI-Anschluss.
+   Es liegt auf derselben Seite wie das Plakat - der Wayland-Aufsatz spannt ein
+   Fenster ueber beide Bildschirme, der Touch beginnt bei x = 224. Alles ist
+   fuer Finger gebaut: grosse Flaechen, kein Hover, keine Tastatur. */
+
+#bedienfeld {
+  --bf-bg: #0e1216; --bf-fg: #ebf0f4; --bf-soft: #a9b4bf; --bf-mute: #7c8791;
+  --bf-accent: #ff5a00; --bf-accent2: #00c800; --bf-panel: #171d23; --bf-line: rgba(235, 240, 244, .14);
+  position: absolute; left: 224px; top: 0; width: 800px; height: 480px; overflow: hidden;
+  background: var(--bf-bg); color: var(--bf-fg);
+  font-family: 'Overpass', system-ui, sans-serif; font-size: 20px; line-height: 1.25;
+  user-select: none; -webkit-user-select: none; touch-action: none;
+}
+#bedienfeld * { box-sizing: border-box; }
+#bedienfeld .mono { font-family: 'Overpass Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+#bedienfeld button { font: inherit; color: inherit; background: var(--bf-panel); border: 2px solid var(--bf-line);
+  border-radius: 12px; padding: 0 18px; min-height: 60px; min-width: 60px; cursor: pointer; }
+#bedienfeld button:active { background: #232b33; }
+#bedienfeld button.an { background: var(--bf-accent); border-color: var(--bf-accent); color: #000; font-weight: 700; }
+#bedienfeld button.gruen { background: var(--bf-accent2); border-color: var(--bf-accent2); color: #000; font-weight: 700; }
+#bedienfeld button[disabled] { opacity: .4; }
+#bedienfeld .hidden { display: none !important; }
+
+/* ---- Sperrbildschirm ------------------------------------------------------ */
+#bfSperre { position: absolute; inset: 0; display: grid; grid-template-columns: 300px 1fr; gap: 24px; padding: 28px 28px 24px 28px; }
+#bfSperre .bfQr { width: 244px; height: 244px; background: #fff; border-radius: 12px; padding: 10px; display: grid; place-items: center; }
+#bfSperre .bfQr svg { width: 224px; height: 224px; display: block; }
+#bfSperre .bfQr.leer { background: var(--bf-panel); color: var(--bf-mute); font-size: 18px; text-align: center; padding: 20px; }
+#bfSperre .bfNetzText { margin-top: 14px; font-size: 18px; color: var(--bf-soft); }
+#bfSperre .bfNetzText b { color: var(--bf-fg); font-weight: 700; }
+#bfSperre .bfUhr { font: 900 96px/1 'Overpass Mono', ui-monospace, monospace; letter-spacing: -.02em; }
+#bfSperre .bfDatum { font: 500 26px/1.2 'Overpass Mono', ui-monospace, monospace; color: var(--bf-soft); margin-top: 6px; }
+#bfSperre .bfZeilen { margin-top: 22px; display: grid; gap: 8px; font-size: 19px; color: var(--bf-soft); }
+#bedienfeld .warn { color: var(--bf-accent); font-weight: 700; }
+#bfSperre .bfZeilen .gut { color: var(--bf-accent2); }
+#bfSperre .bfRechts { position: relative; }
+
+/* Wischen zum Entsperren: eine Spur unten rechts, der Knauf wird quer gezogen.
+   Die Schrift verblasst mit dem Weg (--anteil setzt das Skript). */
+.bfSchieber { --anteil: 0; position: absolute; right: 0; bottom: 0; width: 320px; height: 68px; border-radius: 34px;
+  background: var(--bf-panel); border: 2px solid var(--bf-line); display: grid; place-items: center; overflow: hidden; }
+.bfSchieber > span { font-size: 17px; color: var(--bf-soft); padding-left: 48px; opacity: calc(1 - var(--anteil) * 1.6); }
+.bfKnauf { position: absolute; left: 4px; top: 4px; width: 56px; height: 56px; border-radius: 28px; background: var(--bf-accent);
+  color: #000; font: 900 34px/56px 'Overpass Mono', ui-monospace, monospace; text-align: center; transition: transform .18s ease-out; }
+.bfKnauf.zieht { transition: none; }
+
+/* ---- Entsperrt: Reiter links, Inhalt rechts ------------------------------- */
+#bfMenue { position: absolute; inset: 0; display: grid; grid-template-columns: 150px 1fr; }
+#bfReiter { display: grid; grid-auto-rows: 1fr; gap: 6px; padding: 12px 8px 12px 12px; border-right: 2px solid var(--bf-line); }
+#bfReiter button { border-radius: 12px; font-size: 19px; }
+#bfReiter button.bfSperren { background: transparent; border-color: var(--bf-accent); color: var(--bf-accent); }
+#bfInhalt { padding: 14px 20px; overflow-y: auto; touch-action: pan-y; }
+.bfSeite { display: none; height: 100%; }
+.bfSeite.aktiv { display: grid; align-content: start; gap: 10px; }
+.bfSeite h2 { margin: 0; font: 900 20px/1 'Overpass Mono', ui-monospace, monospace; letter-spacing: .02em; color: var(--bf-accent); text-transform: uppercase; }
+.bfZeile { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bfZeile.knapp button { min-height: 48px; min-width: 56px; }
+.bfZeile.reihe button { flex: 1 1 auto; }
+.bfHinweis { color: var(--bf-mute); font-size: 17px; }
+.bfWert { font: 700 22px/1 'Overpass Mono', ui-monospace, monospace; min-width: 4.2em; text-align: center; }
+
+/* Zahlen stellen: Pfeil hoch, Wert, Pfeil runter - fuenf nebeneinander fuer die Uhr */
+.bfSteller { display: grid; grid-template-columns: repeat(auto-fit, 96px); gap: 10px; }
+.bfSteller .bfSt { display: grid; gap: 4px; justify-items: stretch; text-align: center; }
+.bfSteller .bfSt small { font-size: 15px; color: var(--bf-mute); }
+.bfSteller .bfSt button { min-height: 52px; padding: 0; font-size: 24px; }
+.bfSteller .bfSt .bfWert { min-width: 0; padding: 8px 0; font-size: 28px; }
+
+/* Ziffernblock fuer Breite und Laenge */
+#bfTasten { position: absolute; inset: 0; background: rgba(14, 18, 22, .96); display: grid; grid-template-columns: 1fr 300px; gap: 20px; padding: 20px; }
+#bfTasten .bfEingabe { font: 700 40px/1 'Overpass Mono', ui-monospace, monospace; padding: 16px; background: var(--bf-panel); border-radius: 12px; min-height: 80px; overflow: hidden; }
+#bfTasten .bfBlock { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+#bfTasten .bfBlock button { min-height: 62px; font-size: 26px; }

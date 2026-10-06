@@ -94,6 +94,52 @@ const DEFAULT_CONFIG = {
     // Probezeit fuer den Aufbau: verschiebt nur, welche Zeit das Programm
     // annimmt - nie die Systemuhr. 0 = echte Zeit.
     zeitVersatz: 0,
+    // Tag und Nacht, siehe istNacht() in src/common.js. Die Farben oben sind
+    // die Tagfarben; hier steht, wann stattdessen die Nachtfarben gelten.
+    tagNacht: 'aus',          // aus | astro | fest | hand
+    tagNachtHand: 'tag',      // Stellung des Schalters: tag | nacht
+    tagVon: '07:00',          // feste Zeiten: von..bis ist Tag
+    tagBis: '20:00',
+    astroBreite: '',          // Standort in Grad, leer = noch nicht eingetragen
+    astroLaenge: '',
+    astroVersatzAuf: 0,       // Minuten nach (+) oder vor (-) Sonnenaufgang
+    astroVersatzUnter: 0,     // dasselbe fuer den Sonnenuntergang
+    bgColorNacht: '#12141a',
+    accentNacht: '#e8ecf1',
+    accent2Nacht: '#ff8a1f',
+    // Das Plakat (src/plakat.js): Orte in Reihenfolge, Genre an/aus, Sticker, Tagesende
+    plakatOrte: 'HALLE\nPLATZ\nHOF',
+    plakatGenre: true,
+    plakatSticker: 'PROGRAMM',
+    plakatEnde: '',
+    plakatQr: '',
+    plakatMarke: '',
+    plakatMarkeNacht: '',
+    plakatHoehe: 784,
+    plakatJetztPuls: 35,
+    plakatJetztPulsDauer: 2,
+    plakatStickerPuls: 4,
+    plakatStickerPulsDauer: 3,
+    plakatStickerPulsDrehung: 0,
+    plakatStickerPulsArt: 'weich',
+    plakatStickerPulsText: false,
+    plakatGlanz: false,
+    plakatGlanzArt: 'deckung',
+    plakatGlanzDauer: 6,
+    plakatGlanzPause: 25,
+    plakatGlanzBreite: 70,
+    plakatGlanzStaerke: 100,
+    plakatGlanzWinkel: 45,
+    plakatTagBg: '',
+    plakatTagFg: '',
+    plakatTagAkzent: '',
+    plakatTagAkzentText: '',
+    plakatTagSticker: '',
+    plakatNachtBg: '',
+    plakatNachtFg: '',
+    plakatNachtAkzent: '',
+    plakatNachtAkzentText: '',
+    plakatNachtSticker: '',
     fadeMs: 700,
     imageDuration: 12,
     timetableMaxNext: 5,

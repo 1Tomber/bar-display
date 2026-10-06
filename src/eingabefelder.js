@@ -113,6 +113,20 @@
     }
   }
 
+  // Setzt das Programm einen Wert - beim Laden der Einstellungen etwa -, loest
+  // das kein Ereignis aus, und das Textfeld davor zeigte weiter den alten Stand:
+  // bei den fest im Dokument stehenden Feldern war das ein leeres Feld, obwohl
+  // dahinter laengst eine Uhrzeit stand. Wer Felder fuellt, ruft deshalb
+  // hinterher das hier auf. Ein Feld, in dem gerade jemand tippt, bleibt in Ruhe.
+  function auffrischen(wurzel) {
+    (wurzel || document).querySelectorAll('input[data-' + MERKMAL + ']').forEach((nativ) => {
+      const text = nativ.parentNode && nativ.parentNode.querySelector('.feldText');
+      if (!text || document.activeElement === text) return;
+      text.value = anzeigen(nativ, nativ.value);
+      text.classList.remove('feldFehler');
+    });
+  }
+
   // Die Oberflaeche baut Zeilen staendig neu auf (Timetable, Zeitfenster,
   // Durchsagen). Statt jede Stelle einzeln anzufassen, werden neue Felder hier
   // erkannt - dadurch kann kein Aufruf vergessen werden.
@@ -142,5 +156,5 @@
     start();
   }
 
-  window.barDisplayFelder = { felderAufwerten, feldAufwerten };
+  window.barDisplayFelder = { felderAufwerten, feldAufwerten, auffrischen };
 })();

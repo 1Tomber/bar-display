@@ -1,0 +1,139 @@
+/* Das Plakat - Tagesplan aller Orte auf 224 x 784 Pixeln.
+   Farben und Masse aus dem Entwurf "ProgrammePanel Plakat" (Claude Design). */
+
+@font-face {
+  font-family: 'Overpass';
+  src: url('fonts/Overpass-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900; font-style: normal; font-display: block;
+}
+@font-face {
+  font-family: 'Overpass Mono';
+  src: url('fonts/OverpassMono-VariableFont_wght.ttf') format('truetype');
+  font-weight: 300 700; font-style: normal; font-display: block;
+}
+
+/* ---- Farben: Tag aus den Grafiken gesampelt, Nacht das Gegenstueck ---------- */
+.plakat, .plakat[data-tageszeit="tag"] {
+  --bg: #ebf0f4; --fg: #000000; --fg-soft: #3c4650; --fg-mute: #60656a;
+  --accent: #ff5a00; --accent-text: #d8501c; --accent2: #00dc00; --on-accent2: #000000; --on-accent: #000000;
+  --line: rgba(0, 0, 0, .14);
+}
+.plakat[data-tageszeit="nacht"] {
+  --bg: #0e1216; --fg: #ebf0f4; --fg-soft: #a9b4bf; --fg-mute: #7c8791;
+  --accent: #ff5a00; --accent-text: #ff7a2e; --accent2: #00c800; --on-accent2: #000000; --on-accent: #000000;
+  --line: rgba(235, 240, 244, .16);
+}
+.plakat {
+  --text-primary: var(--fg); --text-secondary: var(--fg-soft); --text-meta: var(--fg-mute);
+  --text-venue: var(--accent-text); --surface-panel: var(--bg); --surface-sticker: var(--accent2);
+  --border-hairline: var(--line); --brick: var(--accent);
+  --font-mono: 'Overpass Mono', ui-monospace, monospace;
+  --font-text: 'Overpass', system-ui, sans-serif;
+}
+
+/* ---- Die Saeule ------------------------------------------------------------ */
+.plakat {
+  width: 224px; height: 784px; box-sizing: border-box; padding: 8px;
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  background: var(--surface-panel); color: var(--text-primary);
+  font-family: var(--font-text); position: relative; overflow: hidden;
+  font-variant-numeric: tabular-nums; hyphens: manual;
+}
+.plakat.pkLeer { align-items: center; justify-content: center; font: 500 14px/1.3 var(--font-mono); text-align: center; }
+.plakat * { box-sizing: border-box; }
+
+/* Kopf: Sticker links (ragt oben aus dem Plakat), Tag und Uhr rechts */
+.pkKopf { display: flex; justify-content: space-between; align-items: flex-end; flex: 0 0 auto; height: 66px; }
+.pkStickerBox { width: 60px; height: 50px; position: relative; align-self: flex-start; }
+.pkSticker { position: absolute; left: -15px; top: -26px; z-index: 0; display: block;
+  transform-origin: 50% 50%; will-change: transform; overflow: visible; }
+/* Der Sticker atmet: Groesse, Takt, Drehung und Rhythmus als Variablen vom Plakat.
+   Normalerweise atmet nur die gruene Scheibe - Schrift, die um ein paar Prozent
+   skaliert, flimmert auf der LED-Wand, weil ihre Kanten ueber ganze Pixel wandern.
+   Mit data-sticker-text="mit" pulsiert der ganze Sticker samt Schrift. */
+.plakat[data-sticker-text="mit"][data-sticker-puls="weich"] .pkSticker { animation: pkStickerPuls var(--sticker-dauer, 3s) ease-in-out infinite; }
+.plakat[data-sticker-text="mit"][data-sticker-puls="linear"] .pkSticker { animation: pkStickerPuls var(--sticker-dauer, 3s) linear infinite; }
+.plakat[data-sticker-text="mit"][data-sticker-puls="herz"] .pkSticker { animation: pkStickerHerz var(--sticker-dauer, 3s) ease-in-out infinite; }
+@keyframes pkStickerPuls { 50% { transform: scale(calc(1 + var(--sticker-tiefe, 0))) rotate(var(--sticker-dreh, 0deg)); } }
+@keyframes pkStickerHerz {
+  0%, 40%, 100% { transform: scale(1) rotate(0deg); }
+  10%, 30% { transform: scale(calc(1 + var(--sticker-tiefe, 0))) rotate(var(--sticker-dreh, 0deg)); }
+  20% { transform: scale(calc(1 + var(--sticker-tiefe, 0) * 0.4)) rotate(0deg); }
+}
+.pkKopfRechts { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;
+  align-self: stretch; text-align: right; position: relative; z-index: 1; }
+.pkTagZeile { font: 500 12px/1 var(--font-mono); letter-spacing: .02em; white-space: nowrap; }
+.pkUhr { font: 900 28px/1 var(--font-mono); white-space: nowrap; display: flex; }
+@keyframes pkBlink { 50% { opacity: 0; } }
+.pkKolon { animation: pkBlink 1s steps(1) infinite; }
+
+/* Orte: ein Raster, das den Rest der Hoehe bekommt */
+.pkOrte { display: grid; gap: 12px; grid-auto-rows: auto; flex: 1 1 auto; min-height: 0; min-width: 0;
+  position: relative; z-index: 1; overflow: hidden; align-content: start; }
+.pkOrt { display: grid; gap: 6px; min-width: 0; }
+.pkOrtKopf { position: relative; height: 28px; }
+.pkOrtKopf svg { display: block; }
+/* Der Name deckt die Ziegel und den Sticker dahinter ab: ab Zeile 6 (die Fuge unter
+   dem oberen Balken) bis Zeile 20 - sonst schimmert die gruene Scheibe durch die Fuge. */
+.pkOrtName { position: absolute; left: 0; top: 6px; height: 15px; display: flex; align-items: center;
+  padding: 4px 3px 0 0; background: var(--surface-panel);
+  font: 900 15px/1 var(--font-mono); letter-spacing: .02em; color: var(--text-venue); white-space: nowrap; }
+.pkActs { display: grid; gap: 4px; min-width: 0; }
+
+/* Ein Act */
+.pkAct { min-width: 0; }
+.pkAct.pk-vorbei { opacity: .45; }
+.pkAct.pkTrenner { border-top: 1px solid var(--border-hairline); padding-top: 4px; }
+.pkHinweis { font: 500 12px/14px var(--font-mono); letter-spacing: .02em; color: var(--text-secondary); white-space: nowrap; }
+/* Zeilenhoehen in ganzen Pixeln und oben buendig statt an der Grundlinie: nur so
+   bleibt jede Act-Zeile 18, 36, ... hoch und der naechste Ziegelkopf landet auf
+   dem Pixelraster. Die Grundlinien von 14px Mono und 15px Text in derselben
+   18px-Zeile liegen ohnehin keinen halben Pixel auseinander. */
+.pkZeileFlex { display: flex; gap: 6px; align-items: flex-start; min-width: 0; }
+.pkZeit { font: 500 14px/18px var(--font-mono); white-space: nowrap; flex: 0 0 auto; color: var(--text-primary); }
+.pkName { min-width: 0; flex: 1 1 auto; font: 600 15px/1.2 var(--font-text); color: var(--text-primary);
+  overflow-wrap: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+/* Steht das Genre in der Zeile, waechst der Name und schiebt das Genre an den rechten
+   Rand - und gibt nie nach: eher bekommt das Genre Punkte. */
+.pkGenre-inline .pkName { white-space: nowrap; flex: 1 0 auto; }
+.pkMeta { font: 400 13px/18px var(--font-text); color: var(--text-meta); white-space: nowrap; }
+.pkZeileFlex > .pkMeta { flex: 0 1 auto; min-width: 0; letter-spacing: -.01em; text-align: right; overflow: hidden; text-overflow: ellipsis; }
+.pkName > .pkMeta { float: right; margin-left: 6px; line-height: 18px; }
+.pkMetaZeile { font: 400 13px/16px var(--font-text); color: var(--text-meta); text-align: right; text-wrap: balance; }
+
+/* Der laufende Act: Zeit ueber dem JETZT-Block, Name daneben */
+.pkAct.pk-jetzt { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 6px; align-items: start; }
+.pkJetztSpalte { display: grid; justify-items: start; }
+.pkJetztSpalte .pkZeit { font-weight: 600; line-height: 18px; }
+/* Das JETZT-Schild: zwei Pixel hoeher als die Zeile es vorgibt, und es atmet -
+   Tiefe und Takt kommen als Variablen vom Plakat (Einstellungen). */
+.pkJetztSpalte svg { display: block; margin-top: -2px; will-change: opacity; animation: pkPuls var(--jetzt-dauer, 2s) ease-in-out infinite; }
+@keyframes pkPuls { 50% { opacity: calc(1 - var(--jetzt-tiefe, 0)); } }
+.pk-jetzt .pkName { font-weight: 700; }
+.pk-jetzt .pkMetaZeile { grid-column: 1 / -1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 48px; }
+/* Das Genre neben dem Schild: die Spalte ist 18 (Zeit) + 13 (Schild) - 2 = 29 hoch, das
+   Schild beginnt in Zeile 16 - die Genrezeile faengt oben buendig mit dem Schild an. */
+.pk-jetzt.pkMetaHoch .pkMetaZeile { margin-top: -13px; }
+
+/* Fuss: QR, ENDE, Ziegelfeld, PROGRAMM, die Marke */
+.pkFuss { position: relative; height: 77px; flex: 0 0 auto; }
+.pkQr { display: block; background: #fff; position: absolute; left: 0; top: 0; }
+.pkEnde { position: absolute; right: 0; top: 0; font: 500 13px/1 var(--font-mono); letter-spacing: .02em; white-space: nowrap; color: var(--text-secondary); }
+.pkFeld { display: block; position: absolute; inset: 0; }
+.pkProgramm { position: absolute; left: 0; top: 56px; height: 14px; display: flex; align-items: center; padding: 3px 3px 0 0;
+  background: var(--surface-panel); font: 900 15px/1 var(--font-mono); letter-spacing: .02em; color: var(--text-venue); white-space: nowrap; }
+/* Die Marke: 38 x 37 Pixel vorgerechnet (Einstellung "Marke", Datei im Logo-Ordner),
+   im 42 x 40 Kasten mit Fuge zu den Ziegeln - so wird nichts skaliert. */
+.pkMarke { position: absolute; right: 0; bottom: 0; width: 42px; height: 40px; display: block; background: var(--surface-panel); padding: 3px 0 0 4px; }
+
+/* ---- Die Seite drumherum ----------------------------------------------------- */
+/* Kein Mauszeiger auf der Wand und dem Touch-Bildschirm */
+body.pkSeite { margin: 0; background: #000; overflow: hidden; cursor: none; }
+body.pkSeite * { cursor: none; }
+/* Voll auf dem Bildschirm: die Saeule sitzt oben links; das Plakat ist so gross
+   wie das Panel, alles andere bleibt schwarz. */
+#plakat { position: absolute; left: 0; top: 0; }
+/* Ein 784 x 224 Signal, das gedreht haengt: dieselbe Drehung wie beim Player */
+body[data-rotation="90"] #plakat  { transform: translateX(100vw) rotate(90deg); transform-origin: top left; }
+body[data-rotation="270"] #plakat { transform: translateY(100vh) rotate(-90deg); transform-origin: top left; }
+body[data-rotation="180"] #plakat { transform: rotate(180deg); }

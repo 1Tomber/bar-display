@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <base href="/">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' file:; img-src 'self' file: data:; font-src 'self' file: data:; style-src 'self' file: 'unsafe-inline'; script-src 'self' file:">
+  <title>Plakat</title>
+  <link rel="stylesheet" href="plakat.css">
+  <link rel="stylesheet" href="bedienfeld.css">
+</head>
+<body class="pkSeite">
+  <!-- Der Tagesplan aller Orte, 224 x 784. Gefuellt von plakat.js aus der
+       Konfiguration; die Zeit ist dieselbe wie im Player (samt Probezeit). -->
+  <div id="plakat"></div>
+  <!-- Das Bedienfeld fuer den Touch-Bildschirm daneben (800 x 480 ab x = 224):
+       gesperrt Uhr und WLAN-QR, entsperrt Uhr stellen, Tag/Nacht, Plakat, Netz.
+       Ohne zweiten Bildschirm liegt es einfach ausserhalb des Bildes. -->
+  <div id="bedienfeld"></div>
+
+  <script src="qr.js"></script>
+  <script src="api-http.js"></script>
+  <script src="suncalc.js"></script>
+  <script src="common.js"></script>
+  <script src="plakat.js"></script>
+  <script src="bedienfeld.js"></script>
+</body>
+</html>

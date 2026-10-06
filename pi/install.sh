@@ -15,10 +15,17 @@
 #
 set -euo pipefail
 
-REPO="https://github.com/Tarmac-Festival/bar-display.git"
-ZIEL="/opt/bar-display"
+# Beide lassen sich von aussen setzen - etwa fuer eine eigene Abspaltung oder
+# einen anderen Ordner. Liegt in ZIEL schon ein Programm ohne .git (von Hand
+# hinueberkopiert, siehe pi/sync.sh), bleibt es unangetastet.
+REPO="${REPO:-https://github.com/Tarmac-Festival/bar-display.git}"
+ZIEL="${ZIEL:-/opt/bar-display}"
 BENUTZER="${SUDO_USER:-${USER:-$(id -un)}}"
 PORT="${PORT:-8080}"
+PORTAL_PORT="${PORTAL_PORT:-80}"
+# Eigener Funkzugang (Access Point) fuer Handys: ja/nein, und das Land fuer den Funk
+AP="${AP:-ja}"
+WLAN_LAND="${WLAN_LAND:-DE}"
 
 sage() { printf '\n\033[1;32m==>\033[0m %s\n' "$*"; }
 warne() { printf '\n\033[1;33m!!\033[0m %s\n' "$*"; }
@@ -83,6 +90,8 @@ sudo apt-get update -qq
 PAKETE="git nodejs"
 # cage nur, wo es gebraucht wird: in einer Arbeitsflaeche waere es nutzlos.
 [ "$KIOSK_ART" = "konsole" ] && PAKETE="$PAKETE cage"
+# i2c-tools und hwclock (util-linux-extra) fuer eine Echtzeituhr am I2C (pi/rtc.sh)
+PAKETE="$PAKETE i2c-tools util-linux-extra"
 # shellcheck disable=SC2086
 sudo apt-get install -y --no-install-recommends $PAKETE
 
@@ -98,6 +107,25 @@ if [ -z "$CHROMIUM" ]; then
   done
 fi
 [ -n "$CHROMIUM" ] || { warne "Chromium nicht gefunden - Einrichtung abgebrochen."; exit 1; }
+
+# Was sich per Option nicht mehr abstellen laesst, regelt eine Richtlinie: die
+# Uebersetzen-Blase ("German | English") haengt sich sonst an die obere rechte
+# Ecke des Fensters - auf einer zweiten Anzeige mitten ins Bild, und ein
+# Kiosk hat niemanden, der sie wegklickt. Debian und Raspberry Pi OS lesen
+# /etc/chromium/policies/managed; wo Chromium anders heisst, liegt der Ordner
+# daneben.
+for ordner in /etc/chromium /etc/chromium-browser; do
+  sudo mkdir -p "$ordner/policies/managed"
+  sudo tee "$ordner/policies/managed/bar-display.json" >/dev/null <<'RICHTLINIE'
+{
+  "TranslateEnabled": false,
+  "SpellCheckServiceEnabled": false,
+  "DefaultBrowserSettingEnabled": false,
+  "BackgroundModeEnabled": false,
+  "PromotionsEnabled": false
+}
+RICHTLINIE
+done
 
 NODE_HAUPT="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
 if [ "$NODE_HAUPT" -lt 16 ]; then
@@ -139,6 +167,8 @@ sage "Programm nach $ZIEL holen"
 if [ -d "$ZIEL/.git" ]; then
   sudo git -C "$ZIEL" fetch --depth 1 origin main
   sudo git -C "$ZIEL" reset --hard origin/main
+elif [ -f "$ZIEL/package.json" ]; then
+  sage "Programm liegt schon in $ZIEL (ohne .git) - wird nicht angefasst"
 else
   sudo rm -rf "$ZIEL"
   sudo git clone --depth 1 "$REPO" "$ZIEL"
@@ -160,6 +190,11 @@ Wants=network-online.target
 Type=simple
 User=$BENUTZER
 Environment=PORT=$PORT
+# Zweiter Anschluss auf Port 80: dort fragen Handys nach dem Anmeldefenster
+# (captive portal), und die Bedienseite geht ohne Portnummer auf. Port 80
+# darf sonst nur root - die Faehigkeit dafuer bekommt der Dienst hier.
+Environment=PORTAL_PORT=$PORTAL_PORT
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 ExecStart=$(command -v node) $ZIEL/pi/server.js
 Restart=always
 RestartSec=3
@@ -189,7 +224,8 @@ Wants=bar-display.service
 # streiten sich beide um denselben Bildschirm: systemd haengt den Login ab,
 # getty startet nach, und die Anzeige kommt nie zum Zug. Conflicts sorgt dafuer,
 # dass systemd den Login sauber beendet, bevor die Anzeige uebernimmt.
-After=getty@tty1.service
+After=getty@tty1.service bar-display-touch.service
+Wants=bar-display-touch.service
 Conflicts=getty@tty1.service
 
 [Service]
@@ -205,6 +241,11 @@ Environment=XDG_RUNTIME_DIR=/run/user/$(id -u "$BENUTZER")
 Environment=PORT=$PORT
 Environment=CHROMIUM=$CHROMIUM
 Environment=CACHE=$CACHE
+# Mit zwei Bildschirmen (LED-Wand am HDMI, 7"-Touch am DSI) friert auf dem Pi
+# einer von beiden nach dem ersten Bild ein - der Bildwechsel wird nie als
+# fertig gemeldet. Schuld sind die DRM-Format-Modifier des vc4-Treibers; ohne
+# sie laufen beide (gemessen 2026-09-22, wlroots 0.18, Trixie).
+Environment=WLR_DRM_NO_MODIFIERS=1
 RuntimeDirectory=bar-display-cache
 RuntimeDirectoryPreserve=yes
 # Bewusst kein ExecStartPre: TTYVHangup haengt vor dem Start alles von tty1 ab,
@@ -423,12 +464,174 @@ JOURNAL
 sudo systemctl restart systemd-journald >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
+# Die LED-Wand: ihr Colorlight-Sender beantwortet die EDID-Anfrage beim ersten
+# Start nicht, der Kernel faellt dann auf 640x480 zurueck. Liegt die EDID der
+# Wand im Repository (pi/led-224x784.edid), bekommt der Kernel sie als Datei
+# und die Betriebsart fest vorgegeben. Nur auf dem Pi, nur wenn noch nicht da.
+LED_EDID="${LED_EDID:-$ZIEL/pi/led-224x784.edid}"
+if [ "$IST_PI" -eq 1 ] && [ -f "$LED_EDID" ] && [ -f /boot/firmware/cmdline.txt ]; then
+  sage "EDID der LED-Wand fuer den Kernel hinterlegen"
+  sudo install -D -m 0644 "$LED_EDID" /lib/firmware/edid/led-224x784.bin
+  if ! grep -q 'drm.edid_firmware=HDMI-A-1' /boot/firmware/cmdline.txt; then
+    sudo cp /boot/firmware/cmdline.txt /boot/firmware/cmdline.txt.vor-plakat
+    sudo sed -i '1 s|$| drm.edid_firmware=HDMI-A-1:edid/led-224x784.bin video=HDMI-A-1:224x784@60D|' /boot/firmware/cmdline.txt
+    echo "cmdline.txt ergaenzt (Sicherung: cmdline.txt.vor-plakat) - wirkt nach dem naechsten Neustart"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+sage "Helfer fuer Uhr und Funkzugang"
+# Zwei kleine Befehle, die root brauchen und die der Dienst per sudo aufruft:
+# die Uhr stellen (Pi ohne Netz und ohne Pufferbatterie) und den eigenen
+# Funkzugang schalten. Sie liegen root-eigen unter /usr/local/bin, damit die
+# sudo-Regel nicht auf eine Datei zeigt, die der Dienstbenutzer aendern kann.
+sudo install -m 0755 "$ZIEL/pi/uhr.sh" /usr/local/bin/bar-display-uhr
+sudo install -m 0755 "$ZIEL/pi/ap.sh" /usr/local/bin/bar-display-ap
+# und ein Zeiger-Thema, das nichts zeichnet (siehe pi/cursor.sh)
+sudo bash "$ZIEL/pi/cursor.sh" >/dev/null
+
+# Echtzeituhr am I2C (pi/rtc.sh): beim Start suchen und einbinden. Dafuer muss
+# der I2C-Bus an sein - das ist der eine Eintrag in der config.txt, den ein
+# Uhrenbaustein braucht; das Overlay selbst laedt das Skript zur Laufzeit.
+sudo install -m 0755 "$ZIEL/pi/rtc.sh" /usr/local/bin/bar-display-rtc
+if [ -n "${BOOTCFG:-}" ] && [ -f "$BOOTCFG" ] && ! grep -q '^dtparam=i2c_arm=on' "$BOOTCFG"; then
+  sudo sed -i 's/^#dtparam=i2c_arm=on/dtparam=i2c_arm=on/' "$BOOTCFG"
+  grep -q '^dtparam=i2c_arm=on' "$BOOTCFG" || echo 'dtparam=i2c_arm=on' | sudo tee -a "$BOOTCFG" >/dev/null
+  I2C_HINWEIS="I2C wurde in $BOOTCFG eingeschaltet - eine Echtzeituhr wird nach dem naechsten Neustart erkannt."
+fi
+sudo tee /etc/systemd/system/bar-display-rtc.service >/dev/null <<'RTC'
+[Unit]
+Description=Bar Display - Echtzeituhr am I2C einbinden
+DefaultDependencies=no
+After=sysinit.target
+Before=time-sync.target bar-display.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bar-display-rtc
+
+[Install]
+WantedBy=sysinit.target
+RTC
+# Nach jedem Netzabgleich die Echtzeituhr nachstellen: systemd-timesyncd
+# wartet auf time-sync.target; ein kleiner Dienst dahinter schreibt den Baustein.
+sudo tee /etc/systemd/system/bar-display-rtc-schreiben.service >/dev/null <<'RTC2'
+[Unit]
+Description=Bar Display - Echtzeituhr nach dem Netzabgleich stellen
+After=time-sync.target
+Wants=time-sync.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bar-display-rtc schreiben
+
+[Install]
+WantedBy=multi-user.target
+RTC2
+sudo systemctl daemon-reload
+sudo systemctl enable bar-display-rtc.service bar-display-rtc-schreiben.service >/dev/null 2>&1 || true
+sudo systemctl start bar-display-rtc.service >/dev/null 2>&1 || true
+
+# Notausgang ueber die Boot-Partition (pi/reset.sh): PIN weg, Funk offen, SSH an
+sudo install -m 0755 "$ZIEL/pi/reset.sh" /usr/local/bin/bar-display-reset
+sudo tee /etc/systemd/system/bar-display-reset.service >/dev/null <<RESET
+[Unit]
+Description=Bar Display - Notausgang von der Boot-Partition
+After=NetworkManager.service
+Before=bar-display.service
+
+[Service]
+Type=oneshot
+Environment=BENUTZER=$BENUTZER
+ExecStart=/usr/local/bin/bar-display-reset
+
+[Install]
+WantedBy=multi-user.target
+RESET
+sudo systemctl daemon-reload
+sudo systemctl enable bar-display-reset.service >/dev/null 2>&1 || true
+sudo BENUTZER="$BENUTZER" /usr/local/bin/bar-display-reset >/dev/null 2>&1 || true
+sudo tee /etc/sudoers.d/bar-display >/dev/null <<SUDO
+# Der Dienst darf genau diese zwei Helfer als root aufrufen (bar-display)
+$BENUTZER ALL=(root) NOPASSWD: /usr/local/bin/bar-display-uhr, /usr/local/bin/bar-display-ap
+SUDO
+sudo chmod 0440 /etc/sudoers.d/bar-display
+sudo visudo -cf /etc/sudoers.d/bar-display >/dev/null || { sudo rm -f /etc/sudoers.d/bar-display; warne "sudo-Regel fehlerhaft - Helfer nicht freigegeben."; }
+
+# Die Touch-Anzeige am DSI-Anschluss: ihr Touch soll auf sie zeigen, nicht auf
+# die ganze Flaeche beider Bildschirme. Das rechnet pi/touch.sh bei jedem
+# Start vor der Anzeige aus (siehe dort, warum nicht WL_OUTPUT).
+sudo install -m 0755 "$ZIEL/pi/touch.sh" /usr/local/bin/bar-display-touch
+sudo tee /etc/systemd/system/bar-display-touch.service >/dev/null <<'TOUCH'
+[Unit]
+Description=Bar Display - Touch-Bildschirm auf seinen Platz legen
+Before=bar-display-kiosk.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bar-display-touch
+
+[Install]
+WantedBy=multi-user.target
+TOUCH
+sudo systemctl daemon-reload
+sudo systemctl enable --now bar-display-touch.service >/dev/null 2>&1 || true
+
+# ---------------------------------------------------------------------------
+if [ "$AP" = "ja" ] && [ "$KIOSK_ART" = "konsole" ] && command -v nmcli >/dev/null 2>&1; then
+  sage "Funkzugang (Access Point) einrichten"
+  # Ohne Land bleibt der Funk auf einem Pi gesperrt.
+  if command -v raspi-config >/dev/null 2>&1; then
+    sudo raspi-config nonint do_wifi_country "$WLAN_LAND" >/dev/null 2>&1 || true
+  fi
+  sudo rfkill unblock wifi >/dev/null 2>&1 || true
+  sudo nmcli radio wifi on >/dev/null 2>&1 || true
+
+  # Anmeldefenster: die Adressen, unter denen Handys nachsehen, ob sie online
+  # sind, zeigen auf dieses Geraet - die Antwort darauf oeffnet die Bedienseite
+  # (lib/webserver.js). Alles andere loest dnsmasq wie gewohnt auf, ein Handy
+  # im Funkzugang kommt also weiter ins Netz, wenn das Geraet am Kabel haengt.
+  sudo mkdir -p /etc/NetworkManager/dnsmasq-shared.d
+  sudo tee /etc/NetworkManager/dnsmasq-shared.d/bar-display.conf >/dev/null <<'DNS'
+# bar-display: Online-Pruefungen der Handys landen hier (Anmeldefenster)
+address=/connectivitycheck.gstatic.com/10.42.0.1
+address=/connectivitycheck.android.com/10.42.0.1
+address=/clients3.google.com/10.42.0.1
+address=/captive.apple.com/10.42.0.1
+address=/www.msftconnecttest.com/10.42.0.1
+address=/www.msftncsi.com/10.42.0.1
+address=/detectportal.firefox.com/10.42.0.1
+address=/nmcheck.gnome.org/10.42.0.1
+address=/networkcheck.kde.org/10.42.0.1
+# und ein paar Namen, die man am Handy tippen kann
+address=/plakat/10.42.0.1
+address=/plakat.local/10.42.0.1
+address=/anzeige/10.42.0.1
+address=/bar-display/10.42.0.1
+DNS
+
+  # Beim ersten Mal: offener Zugang, SSID nach dem Geraetenamen. Wer ihn schon
+  # eingerichtet hat, behaelt seine Einstellung - die steht in NetworkManager.
+  if [ ! -f /etc/NetworkManager/system-connections/bar-display-ap.nmconnection ]; then
+    if sudo /usr/local/bin/bar-display-ap anwenden offen "$(hostname | tr '[:lower:]' '[:upper:]' | cut -c1-32)" >/dev/null 2>&1; then
+      echo "Offener Funkzugang \"$(hostname | tr '[:lower:]' '[:upper:]')\" eingeschaltet - Adresse 10.42.0.1"
+    else
+      warne "Funkzugang liess sich nicht einschalten (kein WLAN?). Spaeter auf der Bedienseite unter System."
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 sage "Aktualisierungsbefehl anlegen"
 sudo tee /usr/local/bin/bar-display-update >/dev/null <<'AKTUELL'
 #!/usr/bin/env bash
 set -euo pipefail
-sudo git -C /opt/bar-display fetch --depth 1 origin main
-sudo git -C /opt/bar-display reset --hard origin/main
+if [ -d /opt/bar-display/.git ]; then
+  sudo git -C /opt/bar-display fetch --depth 1 origin main
+  sudo git -C /opt/bar-display reset --hard origin/main
+else
+  echo "Kein Git in /opt/bar-display - das Programm wurde von Hand hinueberkopiert (pi/sync.sh)."
+fi
 # Das Startskript der Anzeige liegt ausserhalb des Repos und muss mit
 sudo install -m 0755 /opt/bar-display/pi/kiosk.sh /usr/local/bin/bar-display-kiosk
 . /etc/default/bar-display 2>/dev/null || KIOSK_ART=konsole
@@ -454,6 +657,10 @@ sudo tee /usr/local/bin/bar-display-konsole >/dev/null <<'KONSOLE'
 set -euo pipefail
 . /etc/default/bar-display 2>/dev/null || KIOSK_ART=konsole
 PORT="${PORT:-8080}"
+PORTAL_PORT="${PORTAL_PORT:-80}"
+# Eigener Funkzugang (Access Point) fuer Handys: ja/nein, und das Land fuer den Funk
+AP="${AP:-ja}"
+WLAN_LAND="${WLAN_LAND:-DE}"
 
 if [ "${KIOSK_ART:-konsole}" = "desktop" ]; then
   # Kein Dienst, den man anhalten koennte - die Anzeige laeuft in der Sitzung.
@@ -524,6 +731,7 @@ fi
 SSH_HINWEIS=""
 [ "$IST_PI" -eq 1 ] && SSH_HINWEIS='Auf dem Pi ist SSH ab Werk aus - einschalten mit "sudo raspi-config" unter Interface Options.'
 
+[ -n "${I2C_HINWEIS:-}" ] && warne "$I2C_HINWEIS"
 sage "Fertig"
 cat <<ENDE
 

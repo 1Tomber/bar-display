@@ -10,6 +10,11 @@ const QUELLE = path.join(__dirname, '..', 'src', 'common.js');
 const code = fs.readFileSync(QUELLE, 'utf8');
 const ctx = vm.createContext({ console, Date });
 vm.runInContext(code, ctx);
+// SunCalc wie im Browser: als eigenes Skript daneben, es legt `SunCalc` global an
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'suncalc.js'), 'utf8'), ctx);
+// Das Plakat und der QR-Code ebenso
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'qr.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'plakat.js'), 'utf8'), ctx);
 const { isVideoActive, describeWindows, timetableView, entryStartEnd, dayLabel, zeitImFenster,
         fensterEnde, countdownText, aktiveDurchsage, durchsageTeile,
         fotoAusschnitt, fotoStil, ausschnittIstStandard,
@@ -23,7 +28,10 @@ const { isVideoActive, describeWindows, timetableView, entryStartEnd, dayLabel, 
         preisStil, gruppeHatInhalt, preisGruppen, preisSeiten, restzeitText,
         infoEinheit, infoTakt, nachDerUhr, faelligeInfoSeite,
         zeitVersatz, probezeitLaeuft, versatzFuer,
-        istPlanetenweide, nettErster, nettNaechster, nettFaellig } = ctx;
+        istPlanetenweide, nettErster, nettNaechster, nettFaellig,
+        tagNachtArt, gradParsen, astroStandort, astroTag, istNacht, tagNachtFarben,
+        plakatTage, plakatTagWaehlen, plakatTag, plakatHtml, plakatQr, plakatQrText, plakatHoehe,
+        ziegelDicht, ziegelOrtskopf, ziegelFuss, plakatFarbenStil, farbeMischen } = ctx;
 // Ein top-level const landet in einem vm-Kontext nicht auf dem globalen
 // Objekt (Funktionsdeklarationen schon). Im Browser sehen die anderen
 // Skripte es trotzdem - hier muss man es ausdruecklich auswerten.
@@ -1113,6 +1121,210 @@ console.log('-- "Nett hier." --');
   check('auf der Planetenweide nie',
         nettFaellig(bar('TARMAC BAR', 'Planetenweide'), 1000, 5000), false);
   check('ohne Plan gar nicht', nettFaellig(fremd, Infinity, 5000), false);
+})();
+
+console.log('-- Tag und Nacht --');
+(function () {
+  // Aus: immer Tag, egal wie spaet
+  check('aus / 03:00', istNacht({ tagNacht: 'aus' }, MO(3, 0)), false);
+  check('gar nicht gesetzt / 03:00', istNacht({}, MO(3, 0)), false);
+  check('ohne Einstellungen', istNacht(null, MO(3, 0)), false);
+  check('unbekannte Art gilt als aus', tagNachtArt({ tagNacht: 'mond' }), 'aus');
+
+  // Von Hand
+  check('hand / Nacht mittags', istNacht({ tagNacht: 'hand', tagNachtHand: 'nacht' }, MO(12, 0)), true);
+  check('hand / Tag nachts', istNacht({ tagNacht: 'hand', tagNachtHand: 'tag' }, MO(3, 0)), false);
+  check('hand / ohne Stellung ist Tag', istNacht({ tagNacht: 'hand' }, MO(3, 0)), false);
+  // Der Schalter zaehlt nur in seiner eigenen Betriebsart
+  check('Stellung Nacht, aber aus', istNacht({ tagNacht: 'aus', tagNachtHand: 'nacht' }, MO(3, 0)), false);
+
+  // Feste Zeiten: von..bis ist Tag
+  const fest = { tagNacht: 'fest', tagVon: '07:00', tagBis: '20:00' };
+  check('fest 07-20 / 06:59', istNacht(fest, MO(6, 59)), true);
+  check('fest 07-20 / 07:00', istNacht(fest, MO(7, 0)), false);
+  check('fest 07-20 / 19:59', istNacht(fest, MO(19, 59)), false);
+  check('fest 07-20 / 20:00', istNacht(fest, MO(20, 0)), true);
+  check('fest 07-20 / 00:30', istNacht(fest, MO(0, 30)), true);
+  // Tag ueber Mitternacht hinweg - ungewoehnlich, aber nicht verboten
+  const spaet = { tagNacht: 'fest', tagVon: '22:00', tagBis: '04:00' };
+  check('fest 22-04 / 23:00 ist Tag', istNacht(spaet, MO(23, 0)), false);
+  check('fest 22-04 / 12:00 ist Nacht', istNacht(spaet, MO(12, 0)), true);
+  // Kaputte Eingaben: im Zweifel Tag
+  check('fest ohne Zeiten', istNacht({ tagNacht: 'fest' }, MO(3, 0)), false);
+  check('fest mit gleichen Zeiten',
+        istNacht({ tagNacht: 'fest', tagVon: '08:00', tagBis: '08:00' }, MO(3, 0)), false);
+
+  // Standort
+  check('Komma als Dezimalzeichen', gradParsen('52,52', 90), 52.52);
+  check('Punkt und Minus', gradParsen(' -13.405 ', 180), -13.405);
+  check('ausserhalb der Grenze', gradParsen('91', 90), null);
+  check('kein Text', gradParsen('Berlin', 90), null);
+  check('leer', gradParsen('', 90), null);
+  check('Standort vollstaendig', astroStandort({ astroBreite: '52,52', astroLaenge: '13.405' }),
+        { breite: 52.52, laenge: 13.405 });
+  check('Standort halb', astroStandort({ astroBreite: '52.52', astroLaenge: '' }), null);
+
+  // Sonnenstand mit vorgegebenen Zeiten: Aufgang 06:00, Untergang 20:00
+  const sonne = () => ({ auf: MO(6, 0), unter: MO(20, 0), immerUnten: false });
+  const astro = { tagNacht: 'astro', astroBreite: '52.52', astroLaenge: '13.405' };
+  check('astro / 05:59', istNacht(astro, MO(5, 59), sonne), true);
+  check('astro / 06:00', istNacht(astro, MO(6, 0), sonne), false);
+  check('astro / 19:59', istNacht(astro, MO(19, 59), sonne), false);
+  check('astro / 20:00', istNacht(astro, MO(20, 0), sonne), true);
+  // Versatz: morgens 30 Minuten spaeter hell, abends 45 Minuten frueher dunkel
+  const versetzt = Object.assign({}, astro, { astroVersatzAuf: 30, astroVersatzUnter: -45 });
+  check('Versatz +30 / 06:29', istNacht(versetzt, MO(6, 29), sonne), true);
+  check('Versatz +30 / 06:30', istNacht(versetzt, MO(6, 30), sonne), false);
+  check('Versatz -45 / 19:14', istNacht(versetzt, MO(19, 14), sonne), false);
+  check('Versatz -45 / 19:15', istNacht(versetzt, MO(19, 15), sonne), true);
+  check('Versatz als Text', astroTag(Object.assign({}, astro, { astroVersatzAuf: '15' }), MO(12, 0), sonne).beginn,
+        MO(6, 15));
+  check('Versatz wird gekappt', astroTag(Object.assign({}, astro, { astroVersatzUnter: 999 }), MO(12, 0), sonne).ende,
+        MO(23, 0));
+  // Ohne Standort bleibt es Tag, statt nachts im Dunkeln zu raten
+  check('astro ohne Standort', istNacht({ tagNacht: 'astro' }, MO(3, 0), sonne), false);
+  check('astro ohne Standort / astroTag', astroTag({ tagNacht: 'astro' }, MO(3, 0), sonne), null);
+  // Jenseits des Polarkreises: kein Auf- und Untergang
+  const polartag = () => ({ auf: null, unter: null, immerUnten: false });
+  const polarnacht = () => ({ auf: null, unter: null, immerUnten: true });
+  check('Polartag ist Tag', istNacht(astro, MO(3, 0), polartag), false);
+  check('Polarnacht ist Nacht', istNacht(astro, MO(12, 0), polarnacht), true);
+
+  // Dasselbe mit dem echten SunCalc. Feste Zeitpunkte in UTC, damit der Test
+  // nicht von der Zeitzone des Rechners abhaengt: Berlin zur Sommersonnenwende
+  // 2026, Aufgang 02:43 UTC, Untergang 19:33 UTC.
+  const utc = (h, m) => new Date(Date.UTC(2026, 5, 21, h, m));
+  check('Berlin / 02:00 UTC noch Nacht', istNacht(astro, utc(2, 0)), true);
+  check('Berlin / 03:15 UTC schon Tag', istNacht(astro, utc(3, 15)), false);
+  check('Berlin / 19:00 UTC noch Tag', istNacht(astro, utc(19, 0)), false);
+  check('Berlin / 20:15 UTC wieder Nacht', istNacht(astro, utc(20, 15)), true);
+  const berlin = astroTag(astro, utc(12, 0));
+  check('Berlin / Aufgang auf die Minute', berlin.beginn.toISOString().slice(0, 16), '2026-06-21T02:43');
+  check('Berlin / Untergang auf die Minute', berlin.ende.toISOString().slice(0, 16), '2026-06-21T19:33');
+  // Spitzbergen im Juni: die Sonne geht nicht unter
+  const spitzbergen = { tagNacht: 'astro', astroBreite: '78.22', astroLaenge: '15.65' };
+  check('Spitzbergen / Mitternachtssonne', istNacht(spitzbergen, utc(23, 0)), false);
+  check('Spitzbergen / Polarnacht im Dezember',
+        istNacht(spitzbergen, new Date(Date.UTC(2026, 11, 21, 11, 0))), true);
+
+  // Farben
+  const farben = { bgColor: '#111111', accent: '#222222', accent2: '#333333',
+                   bgColorNacht: '#aaaaaa', accentNacht: '#bbbbbb', accent2Nacht: '#cccccc' };
+  check('Tagfarben', tagNachtFarben(farben, false),
+        { bgColor: '#111111', accent: '#222222', accent2: '#333333' });
+  check('Nachtfarben', tagNachtFarben(farben, true),
+        { bgColor: '#aaaaaa', accent: '#bbbbbb', accent2: '#cccccc' });
+  check('Nachtfarben fehlen -> eingebaute dunkle Palette', tagNachtFarben({ bgColor: '#111111' }, true),
+        { bgColor: '#12141a', accent: '#e8ecf1', accent2: '#ff8a1f' });
+  check('Tagfarben fehlen -> Standard', tagNachtFarben({}, false),
+        { bgColor: '#450b6f', accent: '#74ff40', accent2: '#f04e23' });
+})();
+
+console.log('-- Plakat --');
+(function () {
+  const O = { plakatOrte: 'HALLE\nPLATZ\nHOF', plakatGenre: true };
+  const tt = [
+    { date: '2026-09-25', start: '18:30', act: 'Eröffnungsworte', venue: 'HALLE' },
+    { date: '2026-09-25', start: '19:00', act: 'Ensemble Beispielhaft Lang', info: 'Musik-Performance', venue: 'HALLE' },
+    { date: '2026-09-25', start: '21:00', act: 'Band Zwei', info: 'Konzert', venue: 'HALLE' },
+    { date: '2026-09-25', start: '', act: 'DJ Drei', info: 'DJ', venue: 'HALLE', hinweis: 'Davor und in den Pausen' },
+    { date: '2026-09-25', start: '18:00', end: '23:00', act: 'Mitmachbühne', info: 'Mitmachen', venue: 'PLATZ' },
+    { date: '2026-09-25', start: '20:00', dauer: 45, act: 'Duo Vier', venue: 'PLATZ' },
+    { date: '2026-09-25', start: '', act: 'Laufkapelle', venue: 'PLATZ' },
+    { date: '2026-09-25', start: '18:00', act: 'DJ Fünf', venue: 'HOF' },
+    { date: '2026-09-25', start: '20:00', act: 'DJ Sechs', venue: 'HOF' },
+    { date: '2026-09-27', start: '12:00', end: '18:00', act: 'Mitmachbühne', venue: 'PLATZ' },
+    { date: '2026-09-27', start: '15:00', act: 'Toni Tress', venue: 'Bühne Neu' }
+  ];
+  const min = (h, m) => h * 60 + m;
+  const zustand = (tag, ort, act) => tag.orte.find(o => o.name === ort).acts.find(a => a.act === act).zustand;
+
+  check('Tage', plakatTage(tt), ['2026-09-25', '2026-09-27']);
+  check('heute mit Programm', plakatTagWaehlen(tt, new Date(2026, 8, 25, 20, 0)), '2026-09-25');
+  check('nach Mitternacht zaehlt der Vorabend', plakatTagWaehlen(tt, new Date(2026, 8, 26, 1, 30)), '2026-09-25');
+  check('vor dem Fest: der erste Tag', plakatTagWaehlen(tt, new Date(2026, 8, 20, 12, 0)), '2026-09-25');
+  check('dazwischen: der naechste Tag', plakatTagWaehlen(tt, new Date(2026, 8, 26, 12, 0)), '2026-09-27');
+  check('danach: der letzte Tag', plakatTagWaehlen(tt, new Date(2026, 9, 3, 12, 0)), '2026-09-27');
+  check('ohne Acts', plakatTagWaehlen([], new Date(2026, 8, 25)), null);
+
+  const fr = plakatTag(tt, '2026-09-25', min(19, 30), O);
+  check('Kopfzeile', fr.label, 'FREITAG · 25.09.');
+  check('Tagesende aus Mitmachbühne', fr.endeText, 'ENDE · 23:00');
+  check('Orte in Reihenfolge', fr.orte.map(o => o.name), ['HALLE', 'PLATZ', 'HOF']);
+  check('19:30 / Eroeffnung vorbei', zustand(fr, 'HALLE', 'Eröffnungsworte'), 'vorbei');
+  check('19:30 / Ensemble jetzt', zustand(fr, 'HALLE', 'Ensemble Beispielhaft Lang'), 'jetzt');
+  check('19:30 / Band Zwei offen', zustand(fr, 'HALLE', 'Band Zwei'), 'offen');
+  check('Walking Act nie jetzt', zustand(fr, 'HALLE', 'DJ Drei'), 'offen');
+  check('Walking Act nach dem Strich', fr.orte[0].acts.map(a => a.trenner), [false, false, false, true]);
+  const licht = tt.concat([{ date: '2026-09-25', start: '', act: 'Lichtbild A', info: 'Lichtinstallation', venue: 'HALLE' },
+                           { date: '2026-09-25', start: '', act: 'Lichtbild B', info: 'Lichtinstallation', venue: 'HALLE' }]);
+  check('Strich auch nach dem Act mit Hinweis', plakatTag(licht, '2026-09-25', min(19, 30), O).orte[0].acts.map(a => a.act + (a.trenner ? '|' : '')),
+    ['Eröffnungsworte', 'Ensemble Beispielhaft Lang', 'Band Zwei', 'DJ Drei|', 'Lichtbild A|', 'Lichtbild B']);
+  check('Fenster-Act laeuft ohne JETZT', zustand(fr, 'PLATZ', 'Mitmachbühne'), 'offen');
+  check('19:30 / DJ Fünf jetzt (bis zum naechsten Start)', zustand(fr, 'HOF', 'DJ Fünf'), 'jetzt');
+
+  const sp = plakatTag(tt, '2026-09-25', min(20, 30), O);
+  check('20:30 / Duo jetzt (Dauer 45)', zustand(sp, 'PLATZ', 'Duo Vier'), 'jetzt');
+  check('20:30 / DJ Fünf vorbei', zustand(sp, 'HOF', 'DJ Fünf'), 'vorbei');
+  check('20:30 / DJ Sechs jetzt', zustand(sp, 'HOF', 'DJ Sechs'), 'jetzt');
+  check('20:50 / Duo vorbei', zustand(plakatTag(tt, '2026-09-25', min(20, 50), O), 'PLATZ', 'Duo Vier'), 'vorbei');
+  check('23:30 / Mitmachbühne vorbei', zustand(plakatTag(tt, '2026-09-25', min(23, 30), O), 'PLATZ', 'Mitmachbühne'), 'vorbei');
+  check('22:30 / Band Zwei laeuft bis Tagesende', zustand(plakatTag(tt, '2026-09-25', min(22, 30), O), 'HALLE', 'Band Zwei'), 'jetzt');
+  check('nach Tagesende alles vorbei', zustand(plakatTag(tt, '2026-09-25', min(23, 30), O), 'HALLE', 'Band Zwei'), 'vorbei');
+
+  const so = plakatTag(tt, '2026-09-27', min(13, 0), Object.assign({}, O, { plakatEnde: '17:00' }));
+  check('unbekannter Ort hinten', so.orte.map(o => o.name), ['PLATZ', 'Bühne Neu']);
+  check('festes Tagesende', so.endeText, 'ENDE · 17:00');
+  check('Genre aus', plakatTag(tt, '2026-09-25', min(19, 30), Object.assign({}, O, { plakatGenre: false })).orte[0].acts[1].meta, '');
+
+  const html = plakatHtml(fr, new Date(2026, 8, 25, 19, 30), false, O);
+  check('zwei JETZT-Bloecke', (html.match(/>JETZT</g) || []).length, 2);
+  check('Marke: ohne Einstellung keine', html.includes('pkMarke'), false);
+  const mitMarke = Object.assign({}, O, { plakatMarke: 'marke.png', plakatMarkeNacht: 'marke hell.png' });
+  check('Marke am Tag', plakatHtml(fr, new Date(2026, 8, 25, 19, 30), false, mitMarke).includes('src="branding/marke.png"'), true);
+  check('Nacht waehlt die helle Marke', plakatHtml(fr, new Date(2026, 8, 25, 21, 0), true, mitMarke).includes('src="branding/marke%20hell.png"'), true);
+  check('Nacht ohne eigene Marke nimmt die vom Tag', plakatHtml(fr, new Date(2026, 8, 25, 21, 0), true, Object.assign({}, O, { plakatMarke: 'marke.png' })).includes('src="branding/marke.png"'), true);
+  check('Marke: kein Pfad', plakatHtml(fr, new Date(2026, 8, 25, 19, 30), false, Object.assign({}, O, { plakatMarke: '../x.png' })).includes('pkMarke'), false);
+  // Ziegel auf ganzen Pixeln: Zellenanfang, 6 hoch, Fuge rechts und unten
+  const ganz = (liste) => liste.every(b => Number.isInteger(b.x) && Number.isInteger(b.y) && Number.isInteger(b.w));
+  check('Ziegel dicht: ganze Pixel', ganz(ziegelDicht([0, 1, 2, 3], 0, 70)), true);
+  check('Ziegel dicht: 6 breit in der 7er-Zelle', ziegelDicht([0], 1, 14).map(b => [b.x, b.y, b.w]), [[0, 0, 6]]);
+  check('Ziegel dicht: Schachbrett', ziegelDicht([0, 1], 1, 21).map(b => [b.x, b.y, b.w]), [[0, 0, 6], [14, 0, 6], [7, 7, 6]]);
+  check('Ortskopf: ganze Pixel', ganz(ziegelOrtskopf('HALLE', 0)), true);
+  check('Ortskopf: Balken oben und unten', ziegelOrtskopf('HALLE', 0).slice(0, 2).map(b => [b.x, b.y]), [[0, 0], [0, 21]]);
+  check('Fuss: ganze Pixel', ganz(ziegelFuss().feld), true);
+  check('Fuss: keine halben Pixel im HTML', / (?:x|y|width|height)="\d+\.5"/.test(plakatHtml(fr, new Date(2026, 8, 25, 19, 30), false, O).replace(/<text[^>]*>[^<]*<\/text>/g, '')), false);
+  check('Hoehe aus der Einstellung', plakatHtml(fr, new Date(2026, 8, 25, 19, 30), false, Object.assign({}, O, { plakatHoehe: 756 })).includes('style="height:756px;'), true);
+  // Farben: leer = Entwurf (keine Variablen im HTML), sonst alle Variablen samt Mischtoenen
+  check('Farben leer: nichts ueberschrieben', plakatFarbenStil(O, false), '');
+  check('Farben: nur ein Wert reicht', plakatFarbenStil({ plakatTagAkzent: '#123456' }, false).includes('--accent:#123456;'), true);
+  check('Farben: Rest aus dem Entwurf', plakatFarbenStil({ plakatTagAkzent: '#123456' }, false).includes('--bg:#ebf0f4;--fg:#000000;'), true);
+  check('Farben: Unsinn zaehlt nicht', plakatFarbenStil({ plakatNachtBg: 'rot' }, true), '');
+  check('Farben: Nacht eigene Felder', plakatFarbenStil({ plakatNachtBg: '#000000', plakatNachtFg: '#ffffff' }, true).includes('--fg-mute:#999999;'), true);
+  check('Farben mischen', farbeMischen('#ffffff', '#000000', 0.5), '#808080');
+  check('Hoehe: Unsinn heisst 784', [plakatHoehe({}), plakatHoehe({ plakatHoehe: 0 }), plakatHoehe({ plakatHoehe: 'x' }), plakatHoehe({ plakatHoehe: 5000 })], [784, 784, 784, 784]);
+
+  // QR: Schema davor, Host gross, Pfad wie eingegeben; Version 2 dank Stufe L
+  check('QR ohne Schema bekommt https', plakatQrText('beispiel-festival.de/programm/herbst'), 'HTTPS://BEISPIEL-FESTIVAL.DE/programm/herbst');
+  check('QR Schema und Host gross, Pfad bleibt', plakatQrText('http://Example.org/Pfad?x=1'), 'HTTP://EXAMPLE.ORG/Pfad?x=1');
+  const qr = plakatQr('BEISPIEL-FESTIVAL.DE/PROGRAMM/HERBST');
+  check('QR alphanumerisch, 25 Module, 2px je Modul', [qr.text, qr.px], ['HTTPS://BEISPIEL-FESTIVAL.DE/PROGRAMM/HERBST', 54]);
+  check('QR mit Kleinbuchstaben wird groesser (Byte-Modus)', plakatQr('https://beispiel-festival.de/programm/herbst').px > 54, true);
+  check('QR leer: keiner', plakatQr(''), null);
+
+  // Derselbe Act zweimal am selben Ort: eine Zeile, beide Zeiten
+  const zwei = tt.concat([{ date: '2026-09-25', start: '22:00', dauer: 45, act: 'Duo Vier', venue: 'PLATZ' }]);
+  const awp = (m) => plakatTag(zwei, '2026-09-25', m, O).orte[1].acts;
+  check('zwei Slots, eine Zeile', awp(min(19, 0)).filter(a => a.act === 'Duo Vier').length, 1);
+  check('beide Zeiten mit Plus', awp(min(19, 0)).find(a => a.act === 'Duo Vier').zeit, '20:00+22:00');
+  check('19:00 offen', awp(min(19, 0)).find(a => a.act === 'Duo Vier').zustand, 'offen');
+  check('20:30 jetzt (erster Slot)', awp(min(20, 30)).find(a => a.act === 'Duo Vier').zustand, 'jetzt');
+  check('21:00 zwischen den Slots offen', awp(min(21, 0)).find(a => a.act === 'Duo Vier').zustand, 'offen');
+  check('22:30 jetzt (zweiter Slot)', awp(min(22, 30)).find(a => a.act === 'Duo Vier').zustand, 'jetzt');
+  check('23:00 vorbei', awp(min(23, 0)).find(a => a.act === 'Duo Vier').zustand, 'vorbei');
+  check('Reihenfolge nach erstem Start', awp(min(19, 0)).map(a => a.act), ['Mitmachbühne', 'Duo Vier', 'Laufkapelle']);
+  const fenster = tt.concat([{ date: '2026-09-25', start: '18:00', end: '23:00', act: 'Mitmachbühne', info: 'Mitmachen', venue: 'PLATZ' }]);
+  check('Fenster-Acts werden nicht zusammengelegt', plakatTag(fenster, '2026-09-25', min(19, 0), O).orte[1].acts.filter(a => a.act === 'Mitmachbühne').length, 2);
 })();
 
 console.log('\n' + pass + ' bestanden, ' + fail + ' fehlgeschlagen');

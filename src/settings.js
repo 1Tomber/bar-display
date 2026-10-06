@@ -53,6 +53,9 @@ function fillAll() {
   renderTimetable();
   renderLichteffekte();
   renderPrices();
+  // Die Textfelder vor Datum und Uhrzeit bekommen von gesetzten Werten nichts
+  // mit - siehe auffrischen() in eingabefelder.js.
+  if (window.barDisplayFelder) window.barDisplayFelder.auffrischen();
 }
 
 // ---------------------------------------------------------------------------
@@ -135,9 +138,12 @@ function fuerBrowserAnpassen() {
     if (el) el.style.display = 'none';
   }
   // Autostart betrifft das Geraet, an dem die Anzeige haengt - vom Handy aus
-  // laesst sich das nicht sinnvoll setzen.
-  const autoKarte = $('s_autostart') && $('s_autostart').closest('.card');
-  if (autoKarte) autoKarte.style.display = 'none';
+  // laesst sich das nicht sinnvoll setzen. Nur die Zeile verschwindet, nicht
+  // die ganze Karte: die PIN daneben stellt man gerade vom Handy aus.
+  const autoZeile = $('s_autostart') && $('s_autostart').closest('.checkline');
+  if (autoZeile) autoZeile.style.display = 'none';
+  const notausgang = $('s_pin') && $('s_pin').closest('.card') && $('s_pin').closest('.card').querySelector('.hint');
+  if (notausgang) notausgang.style.display = 'none';   // Strg+Alt+S gilt nur am Rechner
 
   // Die Bildschirmauswahl bleibt: welcher Monitor die Anzeige zeigt, will man
   // auch vom Handy umstellen koennen. Sie wird nur ausgeblendet, wenn es gar
@@ -410,6 +416,7 @@ async function fillUhr() {
     return;
   }
 
+  uhrStellenAnbieten(false);
   if (z.synchronisiert) {
     feld.textContent = z.anzeige + '  \u00b7  aus dem Netz abgeglichen';
     feld.className = 'anStatus aktiv';
@@ -420,12 +427,171 @@ async function fillUhr() {
 
   feld.textContent = z.anzeige + '  \u00b7  NICHT abgeglichen';
   feld.className = 'anStatus fehler';
+  uhrStellenAnbieten(!!z.stellbar);
   hinweis.innerHTML = 'Der Zeitabgleich aus dem Netz ist bisher nicht durchgekommen. '
     + 'Ein Raspberry Pi hat keine batteriegepufferte Uhr \u2013 die angezeigte Zeit '
     + 'kann weit danebenliegen, obwohl sie plausibel aussieht. '
     + '<b>Timetable, Zeitfenster der Clips, Ruhezeit und geplante Durchsagen greifen '
     + 'dann zur falschen Stunde.</b><br>Meist fehlt schlicht der Weg ins Internet. '
     + 'Pr\u00fcfen mit <code>timedatectl status</code> auf dem Pi.';
+}
+
+// Ohne Zeitabgleich darf das Handy die Uhr des Geraets stellen - es weiss, wie
+// spaet es ist. Der Knopf erscheint nur, wenn der Dienst das kann (Pi).
+function uhrStellenAnbieten(an) {
+  const zeile = $('uhrStellenZeile'), hinweis = $('uhrStellenHinweis'), knopf = $('uhrStellen');
+  if (!zeile || !knopf) return;
+  zeile.classList.toggle('hidden', !an);
+  hinweis.classList.toggle('hidden', !an);
+  if (knopf.dataset.wired) return;
+  knopf.dataset.wired = '1';
+  knopf.addEventListener('click', async () => {
+    knopf.disabled = true;
+    try {
+      const a = await window.api.uhrStellen(Math.round(Date.now() / 1000));
+      if (a.pinNoetig) { toast('Bitte erst die PIN eingeben.', true); }
+      else if (a.ok) { toast('Uhr gestellt'); }
+      else toast(a.fehler || 'Uhr liess sich nicht stellen.', true);
+    } catch (e) { toast('Uhr liess sich nicht stellen.', true); }
+    knopf.disabled = false;
+    fillUhr();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Eigener Funkzugang (nur auf dem Pi, siehe pi/ap.sh)
+// ---------------------------------------------------------------------------
+let apStand = null;
+
+async function fillAp() {
+  const karte = $('apKarte');
+  if (!karte) return;
+  if (!window.api.apStatus) { karte.classList.add('hidden'); return; }
+  let a = null;
+  try { a = await window.api.apStatus(); } catch (e) { /* unten */ }
+  if (!a || !a.verfuegbar) { karte.classList.add('hidden'); return; }
+  karte.classList.remove('hidden');
+  apStand = a;
+  apZeigen(a);
+
+  if (karte.dataset.wired) return;
+  karte.dataset.wired = '1';
+  $('ap_modus').addEventListener('change', apFelder);
+  $('apAnwenden').addEventListener('click', async () => {
+    const w = { modus: $('ap_modus').value, ssid: $('ap_ssid').value.trim(), schluessel: $('ap_schluessel').value, versteckt: $('ap_versteckt').checked };
+    if (w.modus !== 'aus' && !w.ssid) return toast('Bitte einen Namen fuer das Funknetz eintragen.', true);
+    if (w.modus === 'wpa2' && (w.schluessel.length < 8 || w.schluessel.length > 63)) return toast('Passwort: 8 bis 63 Zeichen.', true);
+    const knopf = $('apAnwenden');
+    knopf.disabled = true; knopf.textContent = 'wird eingerichtet \u2026';
+    try {
+      const a2 = await window.api.apAnwenden(w);
+      if (a2.pinNoetig) toast('Bitte erst die PIN eingeben.', true);
+      else if (a2.fehler) toast(a2.fehler, true);
+      else toast(w.modus === 'aus' ? 'Funkzugang aus' : 'Funkzugang eingeschaltet');
+      if (a2.verfuegbar) { apStand = a2; apZeigen(a2); }
+    } catch (e) { toast('Der Funkzugang antwortet nicht.', true); }
+    knopf.disabled = false; knopf.textContent = 'Funkzugang anwenden';
+  });
+}
+
+function apFelder() {
+  const modus = $('ap_modus').value;
+  $('apSchluesselFeld').style.visibility = modus === 'wpa2' ? '' : 'hidden';
+  $('ap_ssid').closest('.field').style.visibility = modus === 'aus' ? 'hidden' : '';
+  $('apVerstecktZeile').style.visibility = modus === 'aus' ? 'hidden' : '';
+}
+
+function apZeigen(a) {
+  const feld = $('apStatus'), qr = $('apQr');
+  // Felder nur fuellen, solange niemand darin tippt
+  if (document.activeElement !== $('ap_ssid') && document.activeElement !== $('ap_schluessel')) {
+    $('ap_modus').value = a.eingeschaltet === false || !a.ssid ? 'aus' : (a.modus || 'offen');
+    $('ap_ssid').value = a.ssid || '';
+    $('ap_schluessel').value = a.schluessel || '';
+    $('ap_versteckt').checked = !!a.versteckt;
+    apFelder();
+  }
+  if (a.fehler) { feld.textContent = a.fehler; feld.className = 'anStatus fehler'; qr.innerHTML = ''; return; }
+  if (!a.aktiv) { feld.textContent = 'Aus'; feld.className = 'anStatus'; qr.innerHTML = ''; return; }
+  const art = (a.modus === 'wpa2' ? 'mit Passwort' : 'ohne Passwort') + (a.versteckt ? ', Name versteckt' : '');
+  feld.textContent = 'An: ' + a.ssid + '  \u00b7  ' + art + '  \u00b7  http://' + (a.ip || '10.42.0.1') +
+    (a.geraete ? '  \u00b7  ' + a.geraete + ' Ger\u00e4t' + (a.geraete === 1 ? '' : 'e') + ' verbunden' : '');
+  feld.className = 'anStatus aktiv';
+  qr.innerHTML = qrBild(wlanQrText(a));
+}
+
+// ---------------------------------------------------------------------------
+// Plakat ausprobieren: Tag und Uhrzeit waehlen, das Plakat aus dem aktuellen
+// Stand der Seite (auch Ungespeichertes) daneben sehen.
+// ---------------------------------------------------------------------------
+let pvStand = '';
+
+function pvDatum() {
+  const sel = $('pvTag');
+  const tage = plakatTage(state.timetable || []);
+  const alt = sel.value;
+  if (sel.dataset.tage !== tage.join(',')) {
+    sel.dataset.tage = tage.join(',');
+    sel.innerHTML = '';
+    for (const t of tage) {
+      const o = document.createElement('option');
+      const m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const d = new Date(+m[1], +m[2] - 1, +m[3]);
+      o.value = t; o.textContent = DAY_NAMES_LONG[d.getDay()] + ' ' + m[3] + '.' + m[2] + '.';
+      sel.appendChild(o);
+    }
+    if (tage.includes(alt)) sel.value = alt;
+  }
+  return sel.value || null;
+}
+
+function plakatVorschauZeichnen(erzwingen) {
+  const box = $('pvPlakat');
+  if (!box || !state || typeof plakatRendern !== 'function') return;
+  const datum = pvDatum();
+  const min = Number($('pvZeit').value);
+  $('pvUhr').value = pad2(Math.floor(min / 60) % 24) + ':' + pad2(min % 60);
+  if (!datum) { box.innerHTML = '<div class="hint">Noch kein Act mit Datum im Timetable.</div>'; return; }
+  const m = datum.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const jetzt = new Date(+m[1], +m[2] - 1, +m[3], 0, min, 0, 0);
+  const stand = JSON.stringify([datum, min, state.timetable, state.settings]);
+  if (!erzwingen && stand === pvStand) return;
+  pvStand = stand;
+  box.innerHTML = plakatRendern({ timetable: state.timetable || [], settings: state.settings || {} }, jetzt, { datum });
+  plakatGlanzStarten(box, state.settings || {});
+}
+
+// Die Farbfelder zeigen bei leerer Einstellung die Entwurfsfarbe (value im HTML);
+// "Farben wie im Entwurf" leert alle zehn wieder.
+const PLAKAT_FARBFELDER = ['plakatTagBg', 'plakatTagFg', 'plakatTagAkzent', 'plakatTagAkzentText', 'plakatTagSticker', 'plakatNachtBg', 'plakatNachtFg', 'plakatNachtAkzent', 'plakatNachtAkzentText', 'plakatNachtSticker'];
+function plakatFarbenFuellen() {
+  const s = state.settings;
+  for (const k of PLAKAT_FARBFELDER) {
+    const el = $('s_' + k);
+    if (!el) continue;
+    const v = String(s[k] || '').trim();
+    if (/^#[0-9a-f]{6}$/i.test(v)) el.value = v; else el.value = el.defaultValue;
+  }
+  const knopf = $('plakatFarbenEntwurf');
+  if (knopf && !knopf.dataset.wired) {
+    knopf.dataset.wired = '1';
+    knopf.addEventListener('click', () => {
+      for (const k of PLAKAT_FARBFELDER) state.settings[k] = '';
+      plakatFarbenFuellen(); markDirty(); plakatVorschauZeichnen(true);
+    });
+  }
+}
+
+function plakatVorschauVerdrahten() {
+  const zeit = $('pvZeit'), tag = $('pvTag');
+  plakatFarbenFuellen();
+  if (!zeit || zeit.dataset.wired) return;
+  zeit.dataset.wired = '1';
+  zeit.addEventListener('input', () => plakatVorschauZeichnen(true));
+  tag.addEventListener('change', () => plakatVorschauZeichnen(true));
+  // Aenderungen am Timetable und an den Einstellungen kommen von ueberall her -
+  // einmal je Sekunde nachsehen ist billiger als jede Stelle zu verdrahten.
+  setInterval(() => plakatVorschauZeichnen(false), 1000);
 }
 
 // Das Tempo betrifft nur die Laufschrift - bei "steht fest" waere es ein Feld,
@@ -1068,8 +1234,14 @@ function wireButtons() {
 const NUM_FIELDS = ['timetableEvery', 'timetableDuration', 'pricesEvery', 'pricesDuration',
   'pricesProSeite',
                     'timetableMaxNext', 'fadeMs', 'logoHeight', 'transitionMs', 'imageDuration',
-                    'lichtEvery', 'lichtDuration'];
+                    'lichtEvery', 'lichtDuration', 'astroVersatzAuf', 'astroVersatzUnter',
+                    'plakatHoehe', 'plakatJetztPuls', 'plakatJetztPulsDauer',
+                    'plakatStickerPuls', 'plakatStickerPulsDauer', 'plakatStickerPulsDrehung', 'plakatGlanzDauer', 'plakatGlanzPause', 'plakatGlanzBreite', 'plakatGlanzStaerke', 'plakatGlanzWinkel'];
 const TEXT_FIELDS = ['barName', 'subtitle', 'bgColor', 'accent', 'accent2', 'priceNote', 'pin',
+                     'tagNacht', 'tagVon', 'tagBis', 'astroBreite', 'astroLaenge',
+                     'bgColorNacht', 'accentNacht', 'accent2Nacht',
+                     'plakatSticker', 'plakatEnde', 'plakatQr', 'plakatMarke', 'plakatMarkeNacht', 'plakatOrte', 'plakatGlanzArt', 'plakatStickerPulsArt',
+                     'plakatTagBg', 'plakatTagFg', 'plakatTagAkzent', 'plakatTagAkzentText', 'plakatTagSticker', 'plakatNachtBg', 'plakatNachtFg', 'plakatNachtAkzent', 'plakatNachtAkzentText', 'plakatNachtSticker',
                      'timetableTitle', 'timetableSubtitle', 'pricesTitle', 'pricesSubtitle',
                      'titleStyle', 'pattern', 'rotation', 'uebergangsFolge',
                      'qrUrl', 'qrLabel', 'lichtTitel', 'lichtUnterzeile', 'lichtDoku',
@@ -1082,6 +1254,30 @@ function fillSettingsFields() {
   renderUebergaenge();
   fillProbezeit();
   $('s_showClock').checked = !!s.showClock;
+  $('s_plakatGlanz').checked = s.plakatGlanz === true;
+  $('s_plakatStickerPulsText').checked = s.plakatStickerPulsText === true;
+  if (!$('s_plakatStickerPulsText').dataset.wired) {
+    $('s_plakatStickerPulsText').dataset.wired = '1';
+    $('s_plakatStickerPulsText').addEventListener('change', () => { state.settings.plakatStickerPulsText = $('s_plakatStickerPulsText').checked; markDirty(); });
+  }
+  // Die Marke des Plakats kommt wie ein Logo in den Logo-Ordner - nur ohne das
+  // Logo der Anzeige selbst zu veraendern.
+  for (const [knopf, feld] of [['plakatMarkeWahl', 'plakatMarke'], ['plakatMarkeNachtWahl', 'plakatMarkeNacht']]) {
+    const b = $(knopf);
+    if (!b || b.dataset.wired) continue;
+    b.dataset.wired = '1';
+    b.addEventListener('click', async () => {
+      const datei = window.api.addLogo ? await window.api.addLogo(toast) : null;
+      if (!datei) return;
+      state.settings[feld] = datei;
+      $('s_' + feld).value = datei;
+      markDirty();
+    });
+  }
+  if (!$('s_plakatGlanz').dataset.wired) {
+    $('s_plakatGlanz').dataset.wired = '1';
+    $('s_plakatGlanz').addEventListener('change', () => { state.settings.plakatGlanz = $('s_plakatGlanz').checked; markDirty(); });
+  }
   $('s_qrEnabled').checked = !!s.qrEnabled;
   $('s_sparmodus').checked = !!s.sparmodus;
   $('s_fernbedienung').checked = s.fernbedienung !== false;
@@ -1089,6 +1285,9 @@ function fillSettingsFields() {
   $('s_fernPort').value = Number(s.fernPort) || 8080;
   fillFern();
   fernBeobachten();
+  fillAp();
+  plakatVorschauVerdrahten();
+  plakatVorschauZeichnen(true);
   qrFelderAnpassen();
   renderLogoAuswahl();
   renderLogoPreview();
@@ -1100,7 +1299,8 @@ function fillSettingsFields() {
     if (!el || el.dataset.wired) continue;
     el.dataset.wired = '1';
     el.addEventListener('input', () => {
-      const v = parseInt(el.value, 10);
+      // Der Takt des JETZT-Schilds darf halbe Sekunden haben, alles andere sind ganze Zahlen
+      const v = (k === 'plakatJetztPulsDauer' || k === 'plakatStickerPulsDauer') ? parseFloat(el.value) : parseInt(el.value, 10);
       state.settings[k] = isNaN(v) ? 0 : v;
       markDirty();
     });
@@ -1153,6 +1353,82 @@ function fillSettingsFields() {
       state.settings.qrEnabled = e.target.checked;
       qrFelderAnpassen();
       markDirty();
+    });
+  }
+  // Erst hier, nach den Schleifen oben: die Karte zeichnet sich aus
+  // state.settings neu, und das muss beim Tippen schon den neuen Wert enthalten.
+  tagNachtVerdrahten();
+  tagNachtAnpassen();
+
+  // Plakat: das Genre laesst sich abschalten, der Rest laeuft ueber TEXT_FIELDS
+  $('s_plakatGenre').checked = s.plakatGenre !== false;
+  if (!$('s_plakatGenre').dataset.wired) {
+    $('s_plakatGenre').dataset.wired = '1';
+    $('s_plakatGenre').addEventListener('change', (e) => { state.settings.plakatGenre = e.target.checked; markDirty(); });
+    $('s_plakatOrte').addEventListener('input', orteVorschlagen);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tag & Nacht
+// ---------------------------------------------------------------------------
+// Zeigt nur die Felder der gewaehlten Betriebsart und sagt darunter, was die
+// Anzeige daraus macht - gerechnet mit denselben Funktionen und derselben Uhr
+// wie die Anzeige selbst, damit beide nicht von verschiedenen Momenten reden.
+function tagNachtAnpassen() {
+  const s = state.settings;
+  const art = tagNachtArt(s);
+  $('tnAstro').hidden = art !== 'astro';
+  $('tnFest').hidden = art !== 'fest';
+  $('tnHand').hidden = art !== 'hand';
+  $('tnFarben').hidden = art === 'aus';
+
+  const nacht = istNacht(s, new Date(jetztMs()));
+  $('tnHandTag').classList.toggle('primary', art === 'hand' && !nacht);
+  $('tnHandNacht').classList.toggle('primary', art === 'hand' && nacht);
+  $('tnStatus').textContent = tagNachtStatus(s, art, nacht);
+}
+
+function tagNachtStatus(s, art, nacht) {
+  if (art === 'aus') return '';
+  const gerade = 'Gerade: ' + (nacht ? 'Nacht' : 'Tag') + '.';
+  if (art !== 'astro') return gerade;
+  if (!astroStandort(s)) {
+    return 'Noch kein gültiger Standort eingetragen – bis dahin bleibt es bei den Tagfarben.';
+  }
+  const tag = astroTag(s, new Date(jetztMs()));
+  if (!tag) return gerade;
+  if (!tag.beginn || !tag.ende) {
+    return (tag.immerUnten ? 'Polarnacht – die Sonne geht heute nicht auf. '
+                           : 'Polartag – die Sonne geht heute nicht unter. ') + gerade;
+  }
+  return 'Heute Tagfarben von ' + timeLabel(tag.beginn) + ' bis ' + timeLabel(tag.ende) + '. ' + gerade;
+}
+
+function tagNachtVerdrahten() {
+  if ($('s_tagNacht').dataset.tnWired) return;
+  $('s_tagNacht').dataset.tnWired = '1';
+  // Die Werte selbst landen ueber TEXT_FIELDS und NUM_FIELDS in state.settings;
+  // hier kommt nur hinzu, dass sich die Karte danach neu zeichnet. `change`
+  // gehoert dazu, weil ein <select> nicht ueberall ein `input` ausloest.
+  for (const id of ['s_tagNacht', 's_tagVon', 's_tagBis', 's_astroBreite', 's_astroLaenge',
+                    's_astroVersatzAuf', 's_astroVersatzUnter']) {
+    for (const ereignis of ['input', 'change']) {
+      $(id).addEventListener(ereignis, () => {
+        if (id === 's_tagNacht') { state.settings.tagNacht = $(id).value; markDirty(); }
+        tagNachtAnpassen();
+      });
+    }
+  }
+  // Der Handschalter speichert direkt, wie "Jetzt anzeigen" bei der Durchsage:
+  // wer vom Handy aus umschaltet, will nicht noch einen zweiten Knopf suchen.
+  for (const [id, stellung] of [['tnHandTag', 'tag'], ['tnHandNacht', 'nacht']]) {
+    $(id).addEventListener('click', async () => {
+      const vorher = state.settings.tagNachtHand;
+      state.settings.tagNachtHand = stellung;
+      if (!(await save())) { state.settings.tagNachtHand = vorher; tagNachtAnpassen(); return; }
+      tagNachtAnpassen();
+      toast(stellung === 'nacht' ? 'Anzeige zeigt die Nachtfarben' : 'Anzeige zeigt die Tagfarben');
     });
   }
 }
@@ -1488,6 +1764,20 @@ function renderTimetable() {
   markTimetableRows();
 }
 
+// Die Orte als Vorschlagsliste hinter dem Ort-Feld: die eingestellte
+// Reihenfolge des Plakats plus alles, was schon in Zeilen steht.
+function orteVorschlagen() {
+  let liste = $('ttOrte');
+  if (!liste) {
+    liste = document.createElement('datalist');
+    liste.id = 'ttOrte';
+    document.body.appendChild(liste);
+  }
+  const namen = new Set(plakatOrte(state.settings));
+  for (const e of state.timetable || []) if ((e.venue || '').trim()) namen.add(e.venue.trim());
+  liste.innerHTML = [...namen].map(n => '<option value="' + escapeHtml(n) + '"></option>').join('');
+}
+
 function ttRow(e, i) {
   const tr = document.createElement('tr');
   tr.dataset.eid = e.id || (e.id = uid());
@@ -1497,16 +1787,23 @@ function ttRow(e, i) {
     '<td data-titel="Datum"><input type="date" data-f="date" value="' + escapeHtml(e.date || '') + '"></td>' +
     '<td data-titel="Von"><input type="time" data-f="start" value="' + escapeHtml(e.start || '') + '"></td>' +
     '<td data-titel="Bis"><input type="time" data-f="end" value="' + escapeHtml(e.end || '') + '"></td>' +
+    // Dauer in Minuten: nur fuer Acts mit Anfang, aber ohne Ende. Das Plakat
+    // weiss dann, wann "JETZT" wieder weg darf. Auf der Anzeige steht sie nie.
+    '<td data-titel="Dauer"><input type="number" min="5" max="600" step="5" data-f="dauer" value="' + escapeHtml(e.dauer || '') + '" placeholder="min" title="Minuten, nur ohne Bis"></td>' +
+    '<td data-titel="Ort"><input type="text" data-f="venue" list="ttOrte" value="' + escapeHtml(e.venue || '') + '" placeholder="z.B. HALLE"></td>' +
     '<td data-titel="Act"><input type="text" data-f="act" value="' + escapeHtml(e.act || '') + '" placeholder="Name des Acts"></td>' +
-    '<td data-titel="Zusatz"><input type="text" data-f="info" value="' + escapeHtml(e.info || '') + '" placeholder="z.B. Live / DJ-Set"></td>' +
+    '<td data-titel="Zusatz"><input type="text" data-f="info" value="' + escapeHtml(e.info || '') + '" placeholder="z.B. Live / DJ-Set">' +
+    // Hinweis: eine kleine Zeile ueber dem Act auf dem Plakat ("Davor und in den Pausen")
+    '<input type="text" data-f="hinweis" class="ttHinweis" value="' + escapeHtml(e.hinweis || '') + '" placeholder="Hinweis darueber, z.B. Davor und in den Pausen" title="Steht auf dem Plakat klein ueber dem Act"></td>' +
     '<td class="photoCell" data-titel="Foto"></td>' +
     '<td><button class="danger icon" data-act="del">&times;</button></td>';
 
   renderPhotoCell(tr.querySelector('.photoCell'), e);
+  orteVorschlagen();
 
   tr.querySelectorAll('input').forEach(inp => {
     inp.addEventListener('input', () => {
-      e[inp.dataset.f] = inp.value;
+      e[inp.dataset.f] = inp.dataset.f === 'dauer' ? (parseInt(inp.value, 10) || '') : inp.value;
       markDirty();
       markTimetableRows();
     });

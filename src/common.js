@@ -1122,3 +1122,129 @@ function probezeitLaeuft(settings) {
 function versatzFuer(zielzeit, echteZeit) {
   return zielzeit.getTime() - (echteZeit || new Date()).getTime();
 }
+
+// ---------------------------------------------------------------------------
+// Tag und Nacht
+// ---------------------------------------------------------------------------
+// Draussen in der Sonne braucht die Anzeige andere Farben als nachts, wo ein
+// heller Schirm blendet. Die bisherigen Farben sind die Tagfarben; fuer die
+// Nacht gibt es einen zweiten Satz. Wann umgeschaltet wird, sagt `tagNacht`:
+//
+//   aus    nie - es bleibt bei den Tagfarben, alles wie frueher
+//   astro  nach Sonnenstand am eingetragenen Standort, mit Versatz in Minuten
+//   fest   nach zwei festen Uhrzeiten
+//   hand   von Hand, ueber den Schalter auf der Bedienseite
+const TAG_NACHT_ARTEN = ['aus', 'astro', 'fest', 'hand'];
+
+// Mehr als drei Stunden Versatz ergeben keinen Sinn mehr - und schoeben das
+// Tagesende ueber die Sonnenmitternacht, an der die Rechnung den Tag wechselt.
+const ASTRO_VERSATZ_MAX = 180;
+
+function tagNachtArt(settings) {
+  const art = (settings || {}).tagNacht;
+  return TAG_NACHT_ARTEN.includes(art) ? art : 'aus';
+}
+
+// "52,52" oder "52.52" -> 52.52. Das Komma ist ausdruecklich erlaubt: wer die
+// Zahl aus einer deutschen Kartenanwendung abtippt, schreibt sie so.
+function gradParsen(text, grenze) {
+  const roh = String(text == null ? '' : text).trim().replace(',', '.');
+  if (!/^[+-]?\d+(\.\d+)?$/.test(roh)) return null;
+  const n = Number(roh);
+  return Math.abs(n) <= grenze ? n : null;
+}
+
+/** Der eingetragene Standort, oder null, solange er fehlt oder Unsinn ist. */
+function astroStandort(settings) {
+  const s = settings || {};
+  const breite = gradParsen(s.astroBreite, 90);
+  const laenge = gradParsen(s.astroLaenge, 180);
+  return breite === null || laenge === null ? null : { breite, laenge };
+}
+
+function astroVersatz(wert) {
+  const n = Math.round(Number(wert));
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(-ASTRO_VERSATZ_MAX, Math.min(ASTRO_VERSATZ_MAX, n));
+}
+
+// Auf- und Untergang fuer den Sonnentag, in dem `jetzt` liegt. SunCalc sucht
+// sich dafuer den naechstgelegenen Sonnenhoechststand - die Grenze ist also die
+// Sonnenmitternacht am Standort, nicht Mitternacht nach der Uhr des Geraets.
+// Jenseits der Polarkreise gibt es Tage ohne Auf- und Untergang; dann sagt
+// `immerUnten`, ob gerade Polarnacht ist.
+function sonnenzeiten(jetzt, breite, laenge) {
+  if (typeof SunCalc === 'undefined') return null;
+  const t = SunCalc.getTimes(jetzt, breite, laenge);
+  return { auf: t.sunrise || null, unter: t.sunset || null, immerUnten: t.alwaysDown === true };
+}
+
+// Anfang und Ende des Tages nach Sonnenstand, Versatz schon eingerechnet.
+// null, solange der Standort fehlt. `sonne` laesst sich fuer Tests ersetzen.
+function astroTag(settings, jetzt, sonne) {
+  const ort = astroStandort(settings);
+  if (!ort) return null;
+  const z = (sonne || sonnenzeiten)(jetzt, ort.breite, ort.laenge);
+  if (!z) return null;
+  if (!z.auf || !z.unter) return { beginn: null, ende: null, immerUnten: z.immerUnten === true };
+  const s = settings || {};
+  return {
+    beginn: new Date(z.auf.getTime() + astroVersatz(s.astroVersatzAuf) * 60000),
+    ende: new Date(z.unter.getTime() + astroVersatz(s.astroVersatzUnter) * 60000),
+    immerUnten: false
+  };
+}
+
+// Im Zweifel Tag: ohne Standort, mit kaputten Uhrzeiten oder ohne SunCalc
+// bleibt die Anzeige so, wie sie ohne diese Einstellung waere.
+function istNacht(settings, jetzt, sonne) {
+  const s = settings || {};
+  const art = tagNachtArt(s);
+  if (art === 'hand') return s.tagNachtHand === 'nacht';
+  if (art === 'fest') {
+    const von = toMinutes(s.tagVon), bis = toMinutes(s.tagBis);
+    if (von === null || bis === null || von === bis) return false;
+    return !zeitImFenster(s.tagVon, s.tagBis, jetzt);
+  }
+  if (art === 'astro') {
+    const tag = astroTag(s, jetzt, sonne);
+    if (!tag) return false;
+    if (!tag.beginn || !tag.ende) return tag.immerUnten;
+    const t = jetzt.getTime();
+    return !(t >= tag.beginn.getTime() && t < tag.ende.getTime());
+  }
+  return false;
+}
+
+// Die drei Farben, die gerade gelten. Fehlt eine Nachtfarbe, springt die
+// eingebaute dunkle Palette ein - nicht die Tagfarbe, sonst saehe man der
+// Anzeige die Umschaltung nicht an.
+const NACHT_FARBEN = { bgColor: '#12141a', accent: '#e8ecf1', accent2: '#ff8a1f' };
+
+function tagNachtFarben(settings, nacht) {
+  const s = settings || {};
+  if (!nacht) {
+    return { bgColor: s.bgColor || '#450b6f', accent: s.accent || '#74ff40',
+             accent2: s.accent2 || '#f04e23' };
+  }
+  return { bgColor: s.bgColorNacht || NACHT_FARBEN.bgColor,
+           accent: s.accentNacht || NACHT_FARBEN.accent,
+           accent2: s.accent2Nacht || NACHT_FARBEN.accent2 };
+}
+
+// ---------------------------------------------------------------------------
+// Funkzugang: der QR-Code zum Verbinden
+// ---------------------------------------------------------------------------
+// Das WIFI:-Format, das Kameras von iPhone (ab iOS 11) und Android (ab 10)
+// verstehen: T ist die Verschluesselung (WPA oder nopass), S der Name, P das
+// Passwort, H:true bei verstecktem Namen - erst damit sucht das Handy aktiv
+// danach. Sonderzeichen \ ; , : " werden mit Rueckstrich entschaerft.
+function wlanQrText(ap) {
+  const a = ap || {};
+  if (!a.ssid) return '';
+  const e = (t) => String(t).replace(/([\\;,:"])/g, '\\$1');
+  const mitPasswort = a.modus === 'wpa2' && a.schluessel;
+  return 'WIFI:T:' + (mitPasswort ? 'WPA' : 'nopass') + ';S:' + e(a.ssid) +
+    (mitPasswort ? ';P:' + e(a.schluessel) : '') +
+    (a.modus === 'versteckt' || a.versteckt ? ';H:true' : '') + ';;';
+}

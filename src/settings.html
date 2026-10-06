@@ -8,6 +8,7 @@
         content="default-src 'self' file:; img-src 'self' file: data: blob:; font-src 'self' file: data:; style-src 'self' file: 'unsafe-inline'; script-src 'self' file:">
   <title>Bar Display &ndash; Einstellungen</title>
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="plakat.css">
 </head>
 <body>
   <header id="topbar">
@@ -151,8 +152,10 @@
             <th style="width:9.5rem">Datum</th>
             <th style="width:6rem">Von</th>
             <th style="width:6rem">Bis</th>
+            <th style="width:5rem" title="Nur f&uuml;r Acts mit Anfang ohne Ende: wie lange sie laufen. Steht nirgends auf der Anzeige.">Dauer</th>
+            <th style="width:11rem">Ort</th>
             <th>Act</th>
-            <th style="width:20%">Zusatz (optional)</th>
+            <th style="width:18%">Zusatz (optional)</th>
             <th style="width:7rem">Foto</th>
             <th style="width:3rem"></th>
           </tr>
@@ -504,6 +507,188 @@
             <input type="checkbox" id="s_showClock"> <span>Datum und Uhrzeit auf den Info-Slides anzeigen</span>
           </label>
         </div>
+
+        <div class="card">
+          <h2>Plakat</h2>
+          <p class="hint" style="margin-bottom:0.9rem">Der Tagesplan aller Orte auf der hohen S&auml;ule
+             (224 &times; 784). Zu sehen unter <a href="/plakat" target="_blank">/plakat</a>, zum Ausprobieren
+             mit Reglern unter <a href="/plakat/vorschau" target="_blank">/plakat/vorschau</a>.
+             Welcher Act wo l&auml;uft, steht im Reiter <b>Timetable</b> in der Spalte <b>Ort</b>.</p>
+          <label class="checkline">
+            <input type="checkbox" id="s_plakatGenre"> <span>Genre in [Klammern] hinter den Acts zeigen</span>
+          </label>
+          <label class="field" style="margin-top:0.8rem">
+            <span>Orte in dieser Reihenfolge (einer je Zeile)</span>
+            <textarea id="s_plakatOrte" rows="3" style="font-family:inherit"></textarea>
+          </label>
+          <div class="twoCol">
+            <label class="field">
+              <span>Sticker-Text</span>
+              <input type="text" id="s_plakatSticker" placeholder="PROGRAMM" maxlength="12">
+            </label>
+            <label class="field">
+              <span>Tagesende (leer = aus den Acts)</span>
+              <input type="time" id="s_plakatEnde">
+            </label>
+          </div>
+          <label class="field">
+            <span>QR-Code im Fu&szlig; (leer = die Adresse vom Reiter Anzeige, sonst kein Code)</span>
+            <input type="text" id="s_plakatQr" placeholder="HTTPS://BEISPIEL-FESTIVAL.DE/PROGRAMM">
+          </label>
+          <p class="hint">Gro&szlig;buchstaben ergeben einen kleineren Code &ndash; der Pfad hinter dem
+             Schr&auml;gstrich muss dann aber auch gro&szlig; geschrieben funktionieren.</p>
+          <div class="colorRow" style="margin-top:0.6rem">
+            <label class="colorField"><span>Marke unten rechts (Datei im Logo-Ordner, 38 &times; 37 px; leer = keine)</span>
+              <input type="text" id="s_plakatMarke" placeholder="marke.png" style="width:11rem"></label>
+            <button type="button" id="plakatMarkeWahl">Datei&hellip;</button>
+            <label class="colorField"><span>Nachts (leer = wie am Tag)</span>
+              <input type="text" id="s_plakatMarkeNacht" placeholder="marke-hell.png" style="width:11rem"></label>
+            <button type="button" id="plakatMarkeNachtWahl">Datei&hellip;</button>
+          </div>
+          <p class="hint" style="margin-top:0.9rem"><b>Farben am Tag</b> &ndash; leer lassen hei&szlig;t: wie im Entwurf.</p>
+          <div class="colorRow">
+            <label class="colorField"><span>Hintergrund</span><input type="color" id="s_plakatTagBg" value="#ebf0f4"></label>
+            <label class="colorField"><span>Schrift</span><input type="color" id="s_plakatTagFg" value="#000000"></label>
+            <label class="colorField"><span>Ziegel</span><input type="color" id="s_plakatTagAkzent" value="#ff5a00"></label>
+            <label class="colorField"><span>Ortsnamen</span><input type="color" id="s_plakatTagAkzentText" value="#d8501c"></label>
+            <label class="colorField"><span>Sticker</span><input type="color" id="s_plakatTagSticker" value="#00dc00"></label>
+          </div>
+          <p class="hint" style="margin-top:0.9rem"><b>Farben nachts</b></p>
+          <div class="colorRow">
+            <label class="colorField"><span>Hintergrund</span><input type="color" id="s_plakatNachtBg" value="#0e1216"></label>
+            <label class="colorField"><span>Schrift</span><input type="color" id="s_plakatNachtFg" value="#ebf0f4"></label>
+            <label class="colorField"><span>Ziegel</span><input type="color" id="s_plakatNachtAkzent" value="#ff5a00"></label>
+            <label class="colorField"><span>Ortsnamen</span><input type="color" id="s_plakatNachtAkzentText" value="#ff7a2e"></label>
+            <label class="colorField"><span>Sticker</span><input type="color" id="s_plakatNachtSticker" value="#00c800"></label>
+          </div>
+          <div class="btnRow" style="margin-top:0.6rem">
+            <button id="plakatFarbenEntwurf">Farben wie im Entwurf</button>
+          </div>
+          <div class="colorRow" style="margin-top:0.9rem">
+            <label class="colorField"><span>JETZT pulsiert: Tiefe (%, 0 = aus)</span><input type="number" id="s_plakatJetztPuls" min="0" max="100" step="5" style="width:6rem"></label>
+            <label class="colorField"><span>Takt (s)</span><input type="number" id="s_plakatJetztPulsDauer" min="0.5" max="60" step="0.5" style="width:5rem"></label>
+          </div>
+          <p class="hint" style="margin-top:0.9rem"><b>PROGRAMM-Sticker pulsiert</b></p>
+          <div class="colorRow">
+            <label class="colorField"><span>Gr&ouml;&szlig;e (%, 0 = aus)</span><input type="number" id="s_plakatStickerPuls" min="0" max="100" step="1" style="width:5rem"></label>
+            <label class="colorField"><span>Takt (s)</span><input type="number" id="s_plakatStickerPulsDauer" min="0.5" max="60" step="0.5" style="width:5rem"></label>
+            <label class="colorField"><span>Drehung (&deg;)</span><input type="number" id="s_plakatStickerPulsDrehung" min="-45" max="45" step="1" style="width:5rem"></label>
+            <label class="colorField"><span>Rhythmus</span>
+              <select id="s_plakatStickerPulsArt"><option value="weich">weich</option><option value="linear">gleichm&auml;&szlig;ig</option><option value="herz">Herzschlag</option></select></label>
+          </div>
+          <label class="checkline">
+            <input type="checkbox" id="s_plakatStickerPulsText"> <span>Schrift pulsiert mit (flimmert auf der LED-Wand &ndash; sonst atmet nur die Scheibe)</span>
+          </label>
+          <label class="checkline" style="margin-top:0.9rem">
+            <input type="checkbox" id="s_plakatGlanz"> <span>Welle: die Ziegel blenden einzeln aus und ein, w&auml;hrend eine schr&auml;ge Front &uuml;ber das Plakat l&auml;uft</span>
+          </label>
+          <div class="colorRow" id="plakatGlanzFelder">
+            <label class="colorField"><span>Wirkt auf</span>
+              <select id="s_plakatGlanzArt"><option value="deckung">Deckkraft</option><option value="groesse">Gr&ouml;&szlig;e</option></select></label>
+            <label class="colorField"><span>Dauer (s)</span><input type="number" id="s_plakatGlanzDauer" min="1" max="120" step="1" style="width:5rem"></label>
+            <label class="colorField"><span>Pause (s)</span><input type="number" id="s_plakatGlanzPause" min="0" max="3600" step="1" style="width:5rem"></label>
+            <label class="colorField"><span>Breite (px)</span><input type="number" id="s_plakatGlanzBreite" min="4" max="400" step="1" style="width:5rem"></label>
+            <label class="colorField"><span>Tiefe (%)</span><input type="number" id="s_plakatGlanzStaerke" min="0" max="100" step="5" style="width:5rem"></label>
+            <label class="colorField"><span>Winkel (&deg;)</span><input type="number" id="s_plakatGlanzWinkel" min="-180" max="180" step="5" style="width:5rem"></label>
+          </div>
+          <label class="field" style="margin-top:0.8rem">
+            <span>Sichtbare H&ouml;he in Pixeln (784 = ganze S&auml;ule)</span>
+            <input type="number" id="s_plakatHoehe" min="300" max="2000" step="1" placeholder="784">
+          </label>
+          <p class="hint">Zeigt die LED-Wand unten weniger Zeilen als das Signal hat, r&uuml;ckt der Fu&szlig;
+             mit QR-Code und G hier herauf. Der Rest bleibt schwarz.</p>
+          <div class="probeBlock" style="margin-top:0.9rem">
+            <span class="uLabel">Ausprobieren: welcher Tag, welche Uhrzeit</span>
+            <div class="taktZeile">
+              <select id="pvTag"></select>
+              <input type="range" id="pvZeit" min="600" max="1620" step="5" value="1170" style="flex:1 1 auto;min-width:8rem">
+              <output id="pvUhr" style="font-variant-numeric:tabular-nums;min-width:3.2em;text-align:right">19:30</output>
+            </div>
+            <em class="feldHinweis">Nur f&uuml;r die Vorschau hier &ndash; die S&auml;ule l&auml;uft weiter nach
+              der echten Uhr. Zeigt auch, was noch nicht gespeichert ist.</em>
+            <div class="pvRahmen"><div id="pvPlakat"></div></div>
+          </div>
+          <p class="hint">Ein Act mit <b>Von</b> und <b>Bis</b> ist ein Zeitfenster und bekommt kein JETZT
+             (z.B. xstage 18:00&ndash;23:00). Ein Act nur mit <b>Von</b> l&auml;uft bis zur eingetragenen
+             <b>Dauer</b>, sonst bis zum n&auml;chsten Act am selben Ort. Ohne Zeit steht er als Walking Act
+             unter dem Strich. Vorbei ist gedimmt, weg ist nichts.</p>
+        </div>
+
+        <div class="card">
+          <h2>Tag &amp; Nacht</h2>
+          <p class="hint" style="margin-bottom:0.9rem">In der Sonne braucht die Anzeige andere
+             Farben als nachts, wo ein heller Schirm blendet. Die Farben aus
+             <b>Farben, Form &amp; Schrift</b> gelten am Tag; hier steht, wann stattdessen
+             die Nachtfarben gelten.</p>
+          <label class="field">
+            <span>Umschalten</span>
+            <select id="s_tagNacht">
+              <option value="aus">Aus &ndash; immer die Tagfarben</option>
+              <option value="astro">Nach Sonnenstand</option>
+              <option value="fest">Zu festen Uhrzeiten</option>
+              <option value="hand">Von Hand</option>
+            </select>
+          </label>
+
+          <div id="tnAstro" hidden>
+            <div class="twoCol">
+              <label class="field">
+                <span>Breite (Grad)</span>
+                <input type="text" id="s_astroBreite" inputmode="decimal" placeholder="z.B. 52,52">
+              </label>
+              <label class="field">
+                <span>L&auml;nge (Grad)</span>
+                <input type="text" id="s_astroLaenge" inputmode="decimal" placeholder="z.B. 13,41">
+              </label>
+            </div>
+            <div class="twoCol">
+              <label class="field">
+                <span>Tag beginnt &ndash; Minuten nach Sonnenaufgang</span>
+                <input type="number" id="s_astroVersatzAuf" min="-180" max="180" step="5">
+              </label>
+              <label class="field">
+                <span>Nacht beginnt &ndash; Minuten nach Sonnenuntergang</span>
+                <input type="number" id="s_astroVersatzUnter" min="-180" max="180" step="5">
+              </label>
+            </div>
+            <p class="hint">Den Standort zeigt jede Kartenanwendung, wenn man lange auf einen
+               Punkt dr&uuml;ckt. Minuswerte schalten fr&uuml;her um &ndash; &bdquo;-30&ldquo;
+               beim Untergang hei&szlig;t: Nachtfarben schon eine halbe Stunde vorher.
+               Gerechnet wird auf dem Ger&auml;t selbst, ganz ohne Netz.</p>
+          </div>
+
+          <div id="tnFest" hidden>
+            <div class="twoCol">
+              <label class="field">
+                <span>Tag von</span>
+                <input type="time" id="s_tagVon">
+              </label>
+              <label class="field">
+                <span>Tag bis</span>
+                <input type="time" id="s_tagBis">
+              </label>
+            </div>
+          </div>
+
+          <div id="tnHand" hidden>
+            <div class="btnRow">
+              <button id="tnHandTag">Tag</button>
+              <button id="tnHandNacht">Nacht</button>
+            </div>
+            <p class="hint" style="margin-top:0.6rem">Die beiden Kn&ouml;pfe speichern direkt
+               &ndash; ohne den Knopf oben rechts.</p>
+          </div>
+
+          <div id="tnStatus" class="hint" style="margin-top:0.9rem"></div>
+
+          <div id="tnFarben" hidden>
+            <div class="colorRow" style="margin-top:0.9rem">
+              <label class="colorField"><span>Hintergrund nachts</span><input type="color" id="s_bgColorNacht"></label>
+              <label class="colorField"><span>Akzent nachts</span><input type="color" id="s_accentNacht"></label>
+              <label class="colorField"><span>Signal nachts</span><input type="color" id="s_accent2Nacht"></label>
+            </div>
+          </div>
+        </div>
       </div>
       <p class="hint" style="margin-top:1rem">Der Ton ist grunds&auml;tzlich stumm &ndash; alle Clips laufen ohne Ton.</p>
     </section>
@@ -547,10 +732,51 @@
              die Bedienseite im Netz.</p>
         </div>
 
+        <div class="card hidden" id="apKarte">
+          <h2>Eigener Funkzugang (WLAN)</h2>
+          <div id="apStatus" class="anStatus">wird gepr&uuml;ft &hellip;</div>
+          <label class="field" style="margin-top:0.8rem">
+            <span>Zugang</span>
+            <select id="ap_modus">
+              <option value="aus">Aus</option>
+              <option value="offen">Offen &ndash; ohne Passwort</option>
+              <option value="wpa2">Mit Passwort (WPA2)</option>
+            </select>
+          </label>
+          <label class="checkline" id="apVerstecktZeile">
+            <input type="checkbox" id="ap_versteckt"> <span>Namen verstecken &ndash; erscheint in keiner WLAN-Liste, verbinden per QR-Code</span>
+          </label>
+          <div class="twoCol">
+            <label class="field">
+              <span>Name des Funknetzes (SSID)</span>
+              <input type="text" id="ap_ssid" maxlength="32" autocomplete="off" placeholder="PLAKAT">
+            </label>
+            <label class="field" id="apSchluesselFeld">
+              <span>Passwort (8 bis 63 Zeichen)</span>
+              <input type="text" id="ap_schluessel" maxlength="63" autocomplete="off">
+            </label>
+          </div>
+          <div class="btnRow">
+            <button id="apAnwenden">Funkzugang anwenden</button>
+          </div>
+          <div id="apQr" class="fernQr"></div>
+          <p class="hint">Das Ger&auml;t spannt sein eigenes WLAN auf &ndash; Adresse <b>10.42.0.1</b>,
+             oder <b>http://plakat</b> tippen. Wer sich verbindet, bekommt die Bedienseite gleich als
+             Anmeldefenster. Der QR-Code verbindet ein Handy mit einem Scan; bei Passwort steht es
+             darin im Klartext, also nichts Wertvolles nehmen. H&auml;ngt das Ger&auml;t am Kabel,
+             kommen die Handys dar&uuml;ber weiter ins Netz.</p>
+        </div>
+
         <div class="card" id="uhrKarte">
           <h2>Uhrzeit</h2>
           <div id="uhrStatus" class="anStatus">wird gepr&uuml;ft &hellip;</div>
           <p class="hint" id="uhrHinweis" style="margin-top:0.7rem"></p>
+          <div class="btnRow hidden" id="uhrStellenZeile">
+            <button id="uhrStellen">Uhr des Ger&auml;ts auf die Zeit dieses Handys stellen</button>
+          </div>
+          <p class="hint hidden" id="uhrStellenHinweis">Ohne Netz kennt das Ger&auml;t die Zeit nicht.
+             Dein Handy schon &ndash; ein Tipp &uuml;bertr&auml;gt sie. Kommt sp&auml;ter doch ein
+             Zeitserver, gewinnt der.</p>
           <div class="probeBlock">
             <span class="uLabel">Probezeit f&uuml;r den Aufbau</span>
             <div class="taktZeile">
@@ -664,7 +890,9 @@
   <script src="qr.js"></script>
   <script src="upload.js"></script>
   <script src="api-http.js"></script>
+  <script src="suncalc.js"></script>
   <script src="common.js"></script>
+  <script src="plakat.js"></script>
   <script src="eingabefelder.js"></script>
   <script src="settings.js"></script>
 </body>

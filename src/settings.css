@@ -1,3 +1,8 @@
+/* Kein Ziehen-zum-Neuladen am Handy (Android-Browser und Anmeldefenster):
+   beim Hochscrollen wuerde sonst die ganze Seite neu geladen - samt
+   ungespeicherter Aenderungen. */
+html, body { overscroll-behavior-y: none; }
+
 :root {
   --bg: #14161a;
   --bg2: #1b1e24;
@@ -18,10 +23,13 @@ body {
   color: var(--fg);
   font-family: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
   font-size: 14px;
-  height: 100vh;
+  /* Das Dokument selbst scrollt, nicht ein Kasten darin. Sonst steht die
+     Seite fuer das Anmeldefenster von Android immer "ganz oben", und jedes
+     Ziehen nach unten laedt neu statt zu scrollen - man kommt nie wieder
+     hoch. Die Kopfzeile bleibt per sticky oben. */
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 /* ------------------------------- Topbar ------------------------------ */
@@ -34,6 +42,9 @@ body {
   background: var(--bg2);
   border-bottom: 1px solid var(--line);
   flex: none;
+  position: sticky;
+  top: 0;
+  z-index: 30;
 }
 .brand { font-weight: 700; letter-spacing: 0.08em; white-space: nowrap; }
 .brand span { color: var(--muted); font-weight: 400; font-size: 12px; }
@@ -81,7 +92,7 @@ button.icon { padding: 0.35rem 0.55rem; line-height: 1; }
 .btnRow.untenAnListe { margin-top: 0.9rem; }
 
 /* ------------------------------- Panels ------------------------------ */
-main { flex: 1; overflow: auto; padding: 1.4rem 1.6rem 4rem; }
+main { flex: 1; padding: 1.4rem 1.6rem 4rem; }
 .panel { display: none; }
 .panel.active { display: block; }
 
@@ -765,3 +776,11 @@ button.gross { padding: 0.85rem 1.4rem; font-size: 15px; flex: 1; min-width: 150
   border: 0;
   transform-origin: top left;
 }
+
+/* Hinweiszeile fuer das Plakat, unter dem Zusatz in derselben Zelle */
+.ttHinweis { margin-top: 0.3rem; font-size: 0.85em; opacity: 0.85; }
+
+/* Plakat-Vorschau in der Einstellungsseite: die Saeule in Originalgroesse */
+.pvRahmen { margin-top: 0.6rem; overflow: auto; }
+.pvRahmen .plakat { border: 1px solid rgba(0,0,0,.2); }
+#pvPlakat { display: inline-block; }

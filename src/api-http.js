@@ -15,6 +15,10 @@ if (!window.api) {
 
   let zuletzt = 0;
   const beobachter = [];
+  // Wer wissen will, wenn der Dienst nach einem Ausfall wieder da ist - die
+  // Anzeige laedt sich dann neu, damit auch geaenderte Skripte ankommen.
+  const wiederDa = [];
+  let abgerissen = false;
 
   // Der Dienst meldet Änderungen über ein Ereignis; fällt die Verbindung aus,
   // wird sie automatisch neu aufgebaut.
@@ -28,7 +32,11 @@ if (!window.api) {
           beobachter.forEach(fn => fn(cfg));
         } catch (err) { /* kaputte Nachricht überspringen */ }
       });
+      quelle.onopen = () => {
+        if (abgerissen) { abgerissen = false; wiederDa.forEach(fn => fn()); }
+      };
       quelle.onerror = () => {
+        abgerissen = true;
         quelle.close();
         setTimeout(lauschen, 3000);
       };
@@ -37,6 +45,15 @@ if (!window.api) {
     }
   }
   lauschen();
+
+  async function schicken(pfad, daten) {
+    const antwort = await fetch(pfad, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(daten || {}) });
+    const a = await antwort.json().catch(() => ({}));
+    if (antwort.status === 401) return { pinNoetig: true, fehler: 'Bitte erst die PIN eingeben.' };
+    if (!antwort.ok && !a.fehler) a.fehler = 'HTTP ' + antwort.status;
+    return a;
+  }
 
   function loeschen(art, datei) {
     return fetch('/api/loeschen?art=' + encodeURIComponent(art) +
@@ -48,6 +65,12 @@ if (!window.api) {
     paths: () => hole('/api/paths'),
     zeitStatus: () => hole('/api/zeit'),
     fernInfo: () => hole('/api/fern'),
+    // Funkzugang und Uhr: gibt es nur auf dem Pi (pi/ap.sh, pi/uhr.sh); der
+    // Dienst meldet sonst verfuegbar:false, und die Karten bleiben zu.
+    apStatus: () => hole('/api/ap'),
+    apAnwenden: (w) => schicken('/api/ap', w),
+    uhrStellen: (sekunden) => schicken('/api/uhr', { sekunden }),
+    uhrNtp: () => schicken('/api/uhr', { ntp: true }),
     getConfig: () => hole('/api/config'),
     saveConfig: async (cfg) => {
       const antwort = await fetch('/api/config', {
@@ -68,6 +91,7 @@ if (!window.api) {
       return daten;
     },
     onConfigChanged: (cb) => beobachter.push(cb),
+    onReconnected: (cb) => wiederDa.push(cb),
 
     // Im Browser gibt es keine Dateiauswahl und kein Fenster-Handling.
     // Diese Wege laufen über die Einstellungsseite des Dienstes.

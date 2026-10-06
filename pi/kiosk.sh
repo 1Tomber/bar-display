@@ -51,9 +51,13 @@ if ! curl -sf "http://localhost:$PORT/api/config" >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
+# Welche Seite die Anzeige zeigt: die Schleife des Players ("/") oder das
+# Plakat, der Tagesplan aller Orte auf der hohen Saeule ("/plakat").
+SEITE="${SEITE:-/plakat}"
+
 # Die Optionen, die auf beiden Wegen gelten
 OPT=(
-  --kiosk "http://localhost:$PORT/"
+  --kiosk "http://localhost:$PORT$SEITE"
   --autoplay-policy=no-user-gesture-required
   --noerrdialogs --disable-infobars --disable-session-crashed-bubble
   --disable-pinch --overscroll-history-navigation=0
@@ -99,6 +103,12 @@ fi
 
 mkdir -p "$CACHE" 2>/dev/null || true
 
+# Unsichtbarer Mauszeiger (pi/cursor.sh legt das Thema an); ohne das Thema
+# bleibt der Pfeil des Aufsatzes, die Anzeige laeuft trotzdem.
+if [ -d /usr/share/icons/bar-display-leer/cursors ]; then
+  export XCURSOR_THEME=bar-display-leer XCURSOR_SIZE=24 XCURSOR_PATH=/usr/share/icons
+fi
+
 # Was hier oft klemmt, steht sonst nirgends. Einmal ins Protokoll, damit man bei
 # einem Fehlstart nicht raten muss.
 echo "Starte Anzeige: cage=$CAGE chromium=$CHROMIUM port=$PORT"
@@ -127,4 +137,8 @@ exec "$CAGE" -d -- "$CHROMIUM" \
   --enable-low-end-device-mode \
   --renderer-process-limit=1 --process-per-site \
   --disk-cache-dir="$CACHE" --disk-cache-size=33554432 --media-cache-size=16777216 \
-  "${OPT[@]}"
+  "${OPT[@]}" 2>>"$CACHE/cage.log"
+# Was cage und Chromium melden, landet damit in einer Datei im RAM (der Ordner
+# ist der Chromium-Zwischenspeicher, tmpfs): journalctl bekommt vom Aufsatz auf
+# tty1 nichts zu sehen, und ohne die Datei war ein eingefrorener Ausgang nicht
+# zu erklaeren.

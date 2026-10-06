@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <base href="/">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' file:; img-src 'self' file: data:; font-src 'self' file: data:; style-src 'self' file: 'unsafe-inline'; script-src 'self' file:">
+  <title>Plakat – Vorschau</title>
+  <link rel="stylesheet" href="plakat.css">
+  <style>
+    html, body { overscroll-behavior-y: none; }
+    /* Die Vorschau: alle Tage nebeneinander, oben die Regler wie im Entwurf.
+       Nichts davon erscheint auf der Anzeige - das ist Werkzeug fuer den Aufbau. */
+    body { margin: 0; background: #8c9299; font: 13px/1.4 system-ui, sans-serif; color: #111; }
+    .vsLeiste { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: center;
+      padding: 10px 24px; background: #1f2226; color: #d6dade; }
+    .vsLeiste label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .vsLeiste input[type=range] { width: 220px; }
+    .vsLeiste select { font: inherit; padding: 3px 6px; background: #2c3035; color: #fff; border: 1px solid #555; border-radius: 4px; }
+    .vsLeiste .vsWert { min-width: 4.5em; color: #9aa1a8; }
+    .vsLeiste .vsTitel { font-weight: 600; margin-right: 8px; }
+    .vsLeiste a { color: #9aa1a8; margin-left: auto; }
+    .vsTage { display: flex; gap: 24px; justify-content: center; align-items: flex-start; flex-wrap: wrap; padding: 24px; }
+    .vsTag figcaption { font: 600 12px/1.3 system-ui; color: #fff; margin: 0 0 6px; width: 224px; }
+    .vsTag figure { margin: 0; }
+    .vsTag .plakat { outline: 1px solid #555; }
+  </style>
+</head>
+<body>
+  <div class="vsLeiste">
+    <span class="vsTitel">Plakat – Vorschau</span>
+    <label>Minuten seit Beginn <input type="range" id="vsOffset" min="0" max="360" step="15" value="90"> <span class="vsWert" id="vsOffsetWert">90 min</span></label>
+    <label>Anzeige <select id="vsModus"><option value="auto">wie die Anzeige (Sonnenstand/Uhrzeit)</option><option value="tag">Tag</option><option value="nacht">Nacht</option></select></label>
+    <label><input type="checkbox" id="vsGenre" checked> Genre zeigen</label>
+    <label><input type="checkbox" id="vsLive"> echte Uhrzeit statt Regler</label>
+    <a href="/einstellungen">Einstellungen</a>
+  </div>
+  <div class="vsTage" id="vsTage"></div>
+
+  <script src="qr.js"></script>
+  <script src="api-http.js"></script>
+  <script src="suncalc.js"></script>
+  <script src="common.js"></script>
+  <script src="plakat.js"></script>
+  <script src="plakat-vorschau.js"></script>
+</body>
+</html>

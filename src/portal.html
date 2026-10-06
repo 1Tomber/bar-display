@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Plakat - Willkommen</title>
+  <!-- Die Anmeldeseite, die das Handy nach dem Verbinden mit dem Funkzugang
+       aufmacht. Sie laeuft im kleinen Anmeldefenster des Handys: kein Wischen,
+       kaum Skript, nichts von aussen - nur die Wege zur Bedienung und zum
+       Programm, und die Adresse zum Abtippen im richtigen Browser. -->
+  <style>
+    :root { color-scheme: light; }
+    /* Kein Ziehen-zum-Neuladen: im Anmeldefenster von Android zieht man sonst
+       beim Hochscrollen die Seite neu statt weiterzulesen. */
+    html, body { overscroll-behavior-y: none; }
+    body { margin: 0; font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #ebf0f4; color: #000; }
+    main { max-width: 26rem; margin: 0 auto; padding: 1.5rem 1.2rem 2rem; }
+    h1 { font-size: 1.5rem; margin: 0 0 .3rem; }
+    h1 small { display: block; font-weight: 400; font-size: .95rem; color: #3c4650; }
+    p { margin: .6rem 0; }
+    a.knopf { display: block; margin: .8rem 0; padding: 1rem 1.1rem; border-radius: .6rem; text-decoration: none;
+      background: #ff5a00; color: #000; font-weight: 700; font-size: 1.1rem; }
+    a.knopf.leise { background: #fff; border: 2px solid #ff5a00; }
+    a.knopf span { display: block; font-weight: 400; font-size: .9rem; color: #3c4650; margin-top: .15rem; }
+    .adresse { margin-top: 1.4rem; padding: .8rem 1rem; background: #fff; border-radius: .6rem; font-size: .95rem; color: #3c4650; }
+    .adresse code { font: 600 1.05rem ui-monospace, Menlo, Consolas, monospace; color: #000; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Plakat <small>Programmanzeige</small></h1>
+    <p>Du bist mit der Anzeige verbunden. Was m&ouml;chtest du tun?</p>
+    <a class="knopf" href="/einstellungen">Programm bearbeiten <span>Acts, Zeiten, Orte, Anzeige, Uhr</span></a>
+    <a class="knopf leise" href="/plakat/vorschau">Plakat ansehen <span>so wie es auf der S&auml;ule steht</span></a>
+    <div class="adresse">
+      Geht das Fenster hier zu, tipp im Browser diese Adresse ein:<br>
+      <code id="adresse">http://plakat.local</code>
+    </div>
+  </main>
+  <script src="portal.js"></script>
+</body>
+</html>
